@@ -385,5 +385,5 @@ def main():
             print(f"\tmax: {minmax[i][1]:.3e}\n")
             #print(f"{xvgObj.metadata[index]['columns'][1]}:\n\tmin: {minmax[i - 1][0]:.3e}\n\tmax: {minmax[i - 1][1]:.3e}")
 
-
-main()
+if __name__ == "__main__":
+    main()

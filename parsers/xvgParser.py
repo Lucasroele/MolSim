@@ -218,5 +218,5 @@ class XvgParser:
                                      row=i + 1,
                                      col=1)
         # Update layout
-        fig.update_layout(height=300 * len(filenames), showlegend=showlegend)
+        fig.update_layout(height=300 * len(self.filenames), showlegend=showlegend)
         fig.show()
