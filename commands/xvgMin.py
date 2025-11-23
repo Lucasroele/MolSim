@@ -1,0 +1,403 @@
+import argparse
+import sys
+import os
+import numpy as np
+import polars
+import pandas as pd
+import plotly.express as px
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+
+
+
+class XvgParser:
+    """
+    Usage:
+    initialized using a list of (.xvg) filenames or a single filename
+
+    Holds:
+    filenames = [filename_s]
+    data = [np.ndarray]         # xvg-cols in rows
+    metadata = [{key, val}]
+    size = number of entries
+    """
+
+    def __init__(self, filename_s, path=None):
+        self.data = []
+        self.metadata = []
+        if isinstance(filename_s, str):
+            self.filenames = [filename_s]
+        elif isinstance(filename_s, list):
+            self.filenames = filename_s
+        else:
+            raise ValueError("Input must be a string or a list of strings")
+        if path is not None:
+            assert os.path.exists(path)
+            assert os.path.isdir(path)
+            if not path.endswith('/'):
+                path += '/'
+        else:
+            path = ''
+        for i, filename in enumerate(self.filenames):
+            assert filename.endswith('.xvg')
+            assert os.path.exists(path + filename)
+            assert os.path.isfile(path + filename)
+            self.filenames[i] = path + filename
+        for i, filename in enumerate(self.filenames):
+            reading_data = False
+            tempdata = []
+            self.metadata.append({})
+            self.metadata[i]['comments'] = []
+            self.metadata[i]['columns'] = []
+            with open(filename, 'r') as file:
+                prev_line = ''
+                for line in file:
+                    if line.startswith('#'):
+                        self.metadata[i]['comments'].append(line)
+                        prev_line = line
+                        continue
+                    if len(line.strip(' ')) == 0:
+                        prev_line = line
+                        continue
+                    if line.startswith('@'):  # parse in column names
+                        infoline = line.split()
+                        if len(infoline) <= 2:
+                            prev_line = line
+                            continue
+                        # infolinen will have at least 3 elements
+                        if infoline[1] == 'title':
+                            self.metadata[i]['title'] = self.findString(
+                                infoline[2:])
+                        elif infoline[1] == 'xaxis':
+                            if infoline[2] == 'label' and len(infoline) > 3:
+                                self.metadata[i]['xaxis'] = self.findString(
+                                    infoline[3:])
+                            else:
+                                self.metadata[i]['xaxis'] = self.findString(
+                                    infoline[2:])
+                        elif infoline[1] == 'yaxis':
+                            if infoline[2] == 'label' and len(infoline) > 3:
+                                self.metadata[i]['yaxis'] = self.findString(
+                                    infoline[3:])
+                            else:
+                                self.metadata[i]['yaxis'] = self.findString(
+                                    infoline[2:])
+                        elif len(infoline) >= 4 and infoline[2] == "legend" and infoline[1][0] == "s":
+                            self.metadata[i]['columns'].append(
+                                self.findString(infoline[3:]))
+                        elif len(infoline) >= 5 and infoline[1] == "legend" and infoline[2] == "string":
+                            self.metadata[i]['columns'].append(
+                                self.findString(infoline[4:]))
+                        continue
+                    # Reading data lines now
+                    infoline = line.split()
+                    if not reading_data:
+                        reading_data = True
+                        for cel in infoline:
+                            tempdata.append([])
+                        if len(self.metadata[i]['columns']) != len(tempdata):
+                            if prev_line == self.metadata[i]['comments'][-1] and prev_line.split() == len(tempdata):
+                                self.metadata[i]['columns'] = [
+                                    cel for cel in prev_line.split()]
+                            elif len(self.metadata[i]['columns']) == 1:
+                                self.metadata[i]['columns'].insert(0, '#')
+                            else:
+                                self.metadata[i]['columns'] = [
+                                    str(leg) for leg, _ in enumerate(tempdata)]
+                    for k, cel in enumerate(infoline):
+                        tempdata[k].append(float(cel))
+                    prev_line = line
+                self.data.append(np.array(tempdata))
+        self.size = len(self.data)
+
+    def findString(self, list_of_strings):
+        """
+        ['"a', 'b', 'c"'] -> "a b c"
+        """
+        if len(list_of_strings) == 1:
+            return list_of_strings[0].strip('"')
+        ret_string = ''
+        found_start = False
+        for string in list_of_strings:
+            if not found_start and string.startswith('"'):
+                found_start = True
+                ret_string += string
+                continue
+            elif found_start and string.endswith('"'):
+                ret_string += ' ' + string
+                break
+            elif found_start:
+                ret_string += ' ' + string
+        assert len(ret_string) != 0
+        return ret_string.strip('"')
+
+    def indexOfFilename(self, filename):
+        for i, filename_ in enumerate(self.filenames):
+            if filename == filename_:
+                return i
+
+    def indexIsRetrievable(self, index):
+        if isinstance(index, int):
+            assert index in range(self.size)
+        elif isinstance(index, str):
+            assert index in self.filenames
+        else:
+            raise ValueError(f"{index} is not retrievable")
+        return True
+
+    def get_numpy(self, index):  # returns as rows of datapoints
+        assert self.indexIsRetrievable(index)
+        if isinstance(index, str):
+            return self.data[self.indexOfFilename(index)]
+        else:  # Must be int
+            return self.data[index]
+
+    def get_pandas(self, index):  # returns as columns of datapoints
+        assert self.indexIsRetrievable(index)
+        if isinstance(index, str):
+            print(self.metadata[self.indexOfFilename(index)]['columns'])
+            return pd.DataFrame(data=self.data[self.indexOfFilename(index)].T,
+                                columns=self.metadata[self.indexOfFilename(index)]['columns'])
+        else:  # Must be int
+            return pd.DataFrame(data=self.data[index],
+                                columns=self.metadata[index]['columns'])
+
+    def get_polars(self, index):
+        assert self.indexIsRetrievable(index)
+        if isinstance(index, str):
+            return polars.DataFrame(data=self.data[self.indexOfFilename(index)].T,
+                                    schema=self.metadata[self.indexOfFilename(index)]['columns'])
+        else:
+            return polars.DataFrame(data=self.data[index],
+                                    schema=self.metadata[index]['columns'])
+
+    def plot(self, all_in_one=False, subplot_titles=None, showlegend=True):
+        """
+        all_in_one:     overlay all data into a single plot
+        subplot_titles: define titles for the plots (default = filenames)
+        """
+        colors = px.colors.qualitative.Alphabet
+        if all_in_one:
+            rows = 1
+            if subplot_titles is not None:
+                subplot_titles = [str(subplot_titles)]
+            else:
+                subplot_titles = ["All together"]
+        else:
+            rows = self.size
+            if subplot_titles is not None:
+                assert len(subplot_titles) == len(self.filenames), f"The argument `subplot_titles` should be of lenght: {self.size}"
+            else:
+                subplot_titles = self.filenames
+        fig = make_subplots(rows=rows,
+                            cols=1,
+                            subplot_titles=subplot_titles)
+        for i, data in enumerate(self.data):  # subplots
+            for j, row in enumerate(data):  # rows
+                if j == 0:
+                    continue
+                if all_in_one:
+                    fig.add_trace(go.Scatter(x=data[0],
+                                             y=row,
+                                             legendgroup=self.filenames[i] + self.metadata[i]['columns'][j],
+                                             name=self.metadata[i]['columns'][j]),
+                                  row=1,
+                                  col=1)
+                else:
+                    use_row = i + 1
+                    trace = go.Scatter(x=data[0],
+                                       y=row,
+                                       line=dict(color=colors[j]),
+                                       legendgroup=self.metadata[i]['columns'][j],
+                                       name=self.metadata[i]['columns'][j])
+                    if i > 0:
+                        trace['showlegend'] = False
+                    fig.add_trace(trace,
+                                  row=use_row,
+                                  col=1)
+            if rows > 1 or all_in_one and i == 0:
+                if 'xaxis' in self.metadata[i]:
+                    fig.update_xaxes(title_text=self.metadata[i]['xaxis'],
+                                     row=i + 1,
+                                     col=1)
+                if 'yaxis' in self.metadata[i]:
+                    fig.update_yaxes(title_text=self.metadata[i]['yaxis'],
+                                     row=i + 1,
+                                     col=1)
+        # Update layout
+        fig.update_layout(height=300 * len(self.filenames), showlegend=showlegend)
+        fig.show()
+
+# This should be made to integrate with a larger CLI toolset
+# main() should accept args as input
+def register(subparsers):
+    parser = subparsers.add_parser('xvgMin',
+                                   help='Print the smallest and largest numbers in each column of an .xvg file')
+    parser.add_argument('filename1',
+                        nargs='?',
+                        default=None,
+                        help='the .xvg file.')           # positional argument
+    parser.add_argument('-o',
+                        '--output',
+                        type=str,
+                        help='append the output to a file instead of the terminal.')
+    parser.set_defaults(func=main)
+
+# This should dissapear
+def parseArguments():
+    parser = argparse.ArgumentParser(prog='xvgMin.py',
+                                     description='Print the smallest and largest numbers in each column of an .xvg file',
+                                     epilog='Written by Lucas Roeleveld')
+
+    parser.add_argument('filename1',
+                        nargs='?',
+                        default=None,
+                        help='the .xvg file.')           # positional argument
+    parser.add_argument('-o',
+                        '--output',
+                        type=str,
+                        help='append the output to a file instead of the terminal.')
+    args = parser.parse_args()
+    return args
+
+
+def getFileNames(extension):
+    # List all files in the current working directory
+    current_directory = os.getcwd()
+    files_in_directory = os.listdir(current_directory)
+    # Filter out directories from the list
+    filenames = [file for file in files_in_directory
+                 if os.path.isfile(os.path.join(current_directory, file))
+                 and file.endswith(extension)]
+    filenames.sort()
+    return filenames
+
+
+def getDataFromXmgrFiles(_filenames):
+    """
+    Assumes that strings are double quote enclosed
+    Returns
+    dict with
+        <filename> np.arrays with columns in xmgrace stored as rows
+        <cols> max#ofcols
+        <legend_entries> nested list
+    """
+    if isinstance(_filenames, str):
+        filenames = [_filenames]
+    else:
+        filenames = _filenames
+    # Initialize lists to store the data
+    data = {filenames[i]: [] for i in range(len(filenames))}
+    legend_entries = {}
+    cols = 0  # Number of columns used for plotting
+    # Read data from each file
+    reading_cols = False
+    prev_line = ''
+    for i, filename in enumerate(filenames):
+        legend_entries[filename] = []
+        with open(filename, 'r') as file:
+            j = 0
+            for m, line in enumerate(file):
+                if line.startswith('#'):
+                    prev_line = line
+                    continue
+                if line.strip() == '':
+                    prev_line = line
+                    continue
+                if line.startswith('@'):  # parse in column names
+                    infoline = line.split()
+                    if len(infoline) >= 4 and infoline[2] == "legend" and infoline[1][0] == "s" \
+                    or len(infoline) >= 5 and infoline[1] == "legend" and infoline[2] == "string":
+                        label = ""
+                        if infoline[-1].endswith('"') and not infoline[-1].startswith('"'):
+                            for substr in reversed(infoline):
+                                label = substr + " " + label
+                                if substr.startswith('"'):
+                                    break
+                        else:
+                            label = infoline[-1]
+                        label = label.strip('"')
+                        legend_entries[filename].append(label)
+                    prev_line = line
+                    continue
+                # Reading data lines now
+                infoline = line.split()
+                assert len(infoline) > 1, "This script assumes the x axis is defined in the .xvg file"
+                data[filename].append([])
+                for k, col in enumerate(infoline):
+                    data[filename][j].append(float(col))
+                if k > cols:
+                    cols = k
+                j += 1
+                # Make sure the legend_entries are good
+                if not reading_cols:
+                    if len(legend_entries[filename]) < len(infoline) - 1:
+                        if len(prev_line.split()) == len(infoline):
+                            legend_entries[filename] = [prev_line.split()[1]]
+                            for name in prev_line.split()[2:]:
+                                legend_entries[filename].append(name)
+                        else:
+                            legend_entries[filename] = [str(a) for a in range(len(infoline) + 1)[1:]]
+
+
+                prev_line = line
+                reading_cols = True
+            assert len(legend_entries[filename]) == len(data[filename][0]) - 1, "legend entries not parsed well"
+
+    # Create the subplot figure
+    data = {filenames[i]: np.array(data[filenames[i]]).T for i in range(len(data))}
+    data["cols"] = cols
+    data["legend_entries"] = legend_entries
+    return data
+
+
+def main():
+    args = parseArguments()
+    if args.filename1 is None:
+        args.filename1 = getFileNames(".xvg")[0]
+    running_folder = os.getcwd()
+    if not os.path.exists(args.filename1):
+        sys.exit("Error: " + "The file `" + running_folder + "/" + args.filename1 + "` does not exist.")
+
+    #data = getDataFromXmgrFiles(args.filename1)
+    xvgObj = XvgParser(args.filename1)
+    index = 0
+
+    minmax = []
+    for i, row in enumerate(xvgObj.data[index]):
+        minmax.append([])
+        minmax[i].append(min(row))
+        minmax[i].append(max(row))
+
+    headers = [] 
+    if len(minmax) == 2 and 'xaxis' in xvgObj.metadata[index] and 'yaxis' in xvgObj.metadata[index]:
+        headers = [xvgObj.metadata[index]['xaxis'], xvgObj.metadata[index]['yaxis']]
+
+    if args.output is not None:
+        if os.path.exists(args.output):
+            writemode = 'a'
+        else:
+            writemode = 'w'
+        with open(args.output, writemode) as file:
+            file.write(f"\nFetched from {args.filename1}:\n")
+            for i, row in enumerate(xvgObj.data[index]):
+                if len(headers) > i:
+                    file.write(f"{headers[i]}:\n")
+                else:
+                    file.write(f"{xvgObj.metadata[index]['columns'][i]}:\n")
+                file.write(f"\tmin: {minmax[i][0]:.3e}\n")
+                file.write(f"\tmax: {minmax[i][1]:.3e}\n")
+
+    else:
+        print(f"\nFetched from {args.filename1}:")
+        for i, row in enumerate(xvgObj.data[index]):
+            if len(headers) > i:
+                print(f"{headers[i]}:\n")
+            else:
+                print(f"{xvgObj.metadata[index]['columns'][i]}:\n")
+            print(f"\tmin: {minmax[i][0]:.3e}\n")
+            print(f"\tmax: {minmax[i][1]:.3e}\n")
+            #print(f"{xvgObj.metadata[index]['columns'][1]}:\n\tmin: {minmax[i - 1][0]:.3e}\n\tmax: {minmax[i - 1][1]:.3e}")
+
+if __name__ == "__main__":
+    main()
