@@ -1,7 +1,10 @@
 [project]
-name = "MolSim"
+name = "molsim"
 version = "0.1.0"
-requires-python = "3.15"
+requires-python = ">=3.13"
 
 [project.scripts]
-molsim = "molsim.cli:main"
+molsim = "cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
