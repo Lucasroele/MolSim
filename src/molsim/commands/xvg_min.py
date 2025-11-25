@@ -20,83 +20,82 @@ def register(subparsers):
                         help='append the output to a file instead of the terminal.')
     parser.set_defaults(func=main)
 
-
-def getDataFromXmgrFiles(_filenames):
-    """
-    Assumes that strings are double quote enclosed
-    Returns
-    dict with
-        <filename> np.arrays with columns in xmgrace stored as rows
-        <cols> max#ofcols
-        <legend_entries> nested list
-    """
-    if isinstance(_filenames, str):
-        filenames = [_filenames]
-    else:
-        filenames = _filenames
-    # Initialize lists to store the data
-    data = {filenames[i]: [] for i in range(len(filenames))}
-    legend_entries = {}
-    cols = 0  # Number of columns used for plotting
-    # Read data from each file
-    reading_cols = False
-    prev_line = ''
-    for i, filename in enumerate(filenames):
-        legend_entries[filename] = []
-        with open(filename, 'r') as file:
-            j = 0
-            for m, line in enumerate(file):
-                if line.startswith('#'):
-                    prev_line = line
-                    continue
-                if line.strip() == '':
-                    prev_line = line
-                    continue
-                if line.startswith('@'):  # parse in column names
-                    infoline = line.split()
-                    if len(infoline) >= 4 and infoline[2] == "legend" and infoline[1][0] == "s" \
-                    or len(infoline) >= 5 and infoline[1] == "legend" and infoline[2] == "string":
-                        label = ""
-                        if infoline[-1].endswith('"') and not infoline[-1].startswith('"'):
-                            for substr in reversed(infoline):
-                                label = substr + " " + label
-                                if substr.startswith('"'):
-                                    break
-                        else:
-                            label = infoline[-1]
-                        label = label.strip('"')
-                        legend_entries[filename].append(label)
-                    prev_line = line
-                    continue
-                # Reading data lines now
-                infoline = line.split()
-                assert len(infoline) > 1, "This script assumes the x axis is defined in the .xvg file"
-                data[filename].append([])
-                for k, col in enumerate(infoline):
-                    data[filename][j].append(float(col))
-                if k > cols:
-                    cols = k
-                j += 1
-                # Make sure the legend_entries are good
-                if not reading_cols:
-                    if len(legend_entries[filename]) < len(infoline) - 1:
-                        if len(prev_line.split()) == len(infoline):
-                            legend_entries[filename] = [prev_line.split()[1]]
-                            for name in prev_line.split()[2:]:
-                                legend_entries[filename].append(name)
-                        else:
-                            legend_entries[filename] = [str(a) for a in range(len(infoline) + 1)[1:]]
-
-
-                prev_line = line
-                reading_cols = True
-            assert len(legend_entries[filename]) == len(data[filename][0]) - 1, "legend entries not parsed well"
-
-    # Create the subplot figure
-    data = {filenames[i]: np.array(data[filenames[i]]).T for i in range(len(data))}
-    data["cols"] = cols
-    data["legend_entries"] = legend_entries
-    return data
+#def getDataFromXmgrFiles(_filenames):
+#    """
+#    Assumes that strings are double quote enclosed
+#    Returns
+#    dict with
+#        <filename> np.arrays with columns in xmgrace stored as rows
+#        <cols> max#ofcols
+#        <legend_entries> nested list
+#    """
+#    if isinstance(_filenames, str):
+#        filenames = [_filenames]
+#    else:
+#        filenames = _filenames
+#    # Initialize lists to store the data
+#    data = {filenames[i]: [] for i in range(len(filenames))}
+#    legend_entries = {}
+#    cols = 0  # Number of columns used for plotting
+#    # Read data from each file
+#    reading_cols = False
+#    prev_line = ''
+#    for i, filename in enumerate(filenames):
+#        legend_entries[filename] = []
+#        with open(filename, 'r') as file:
+#            j = 0
+#            for m, line in enumerate(file):
+#                if line.startswith('#'):
+#                    prev_line = line
+#                    continue
+#                if line.strip() == '':
+#                    prev_line = line
+#                    continue
+#                if line.startswith('@'):  # parse in column names
+#                    infoline = line.split()
+#                    if len(infoline) >= 4 and infoline[2] == "legend" and infoline[1][0] == "s" \
+#                    or len(infoline) >= 5 and infoline[1] == "legend" and infoline[2] == "string":
+#                        label = ""
+#                        if infoline[-1].endswith('"') and not infoline[-1].startswith('"'):
+#                            for substr in reversed(infoline):
+#                                label = substr + " " + label
+#                                if substr.startswith('"'):
+#                                    break
+#                        else:
+#                            label = infoline[-1]
+#                        label = label.strip('"')
+#                        legend_entries[filename].append(label)
+#                    prev_line = line
+#                    continue
+#                # Reading data lines now
+#                infoline = line.split()
+#                assert len(infoline) > 1, "This script assumes the x axis is defined in the .xvg file"
+#                data[filename].append([])
+#                for k, col in enumerate(infoline):
+#                    data[filename][j].append(float(col))
+#                if k > cols:
+#                    cols = k
+#                j += 1
+#                # Make sure the legend_entries are good
+#                if not reading_cols:
+#                    if len(legend_entries[filename]) < len(infoline) - 1:
+#                        if len(prev_line.split()) == len(infoline):
+#                            legend_entries[filename] = [prev_line.split()[1]]
+#                            for name in prev_line.split()[2:]:
+#                                legend_entries[filename].append(name)
+#                        else:
+#                            legend_entries[filename] = [str(a) for a in range(len(infoline) + 1)[1:]]
+#
+#
+#                prev_line = line
+#                reading_cols = True
+#            assert len(legend_entries[filename]) == len(data[filename][0]) - 1, "legend entries not parsed well"
+#
+#    # Create the subplot figure
+#    data = {filenames[i]: np.array(data[filenames[i]]).T for i in range(len(data))}
+#    data["cols"] = cols
+#    data["legend_entries"] = legend_entries
+#    return data
 
 
 def main(args):

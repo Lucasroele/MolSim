@@ -21,6 +21,7 @@ src/molsim.egg-info/entry_points.txt
 src/molsim.egg-info/top_level.txt
 src/molsim/archive/cyclicpeptides.py
 src/molsim/archive/pdbMerger_unmemoized.py
+src/molsim/commands/__init__.py
 src/molsim/commands/xvg_min.py
 src/molsim/parsers/xvgParser.py
 src/molsim/testing/pdbmerger_test/pdbMerger20-8.py
