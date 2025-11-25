@@ -12,6 +12,6 @@ pip install -e .
 
 ## Usage
 ```bash
-molsim xvg_min src/operands/dist.xvg
+molsim xvg_min src/molsim/operands/dist.xvg
 ```
 

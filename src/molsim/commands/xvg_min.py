@@ -1,50 +1,24 @@
-import argparse
 import sys
 import os
 import numpy as np
-import polars
-import pandas as pd
-import plotly.express as px
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 
-# imports I use for development
-from commands.parser_temp.xvgParser import XvgParser
-from commands.utils_temp import getFileNames
+from ..parsers.xvgParser import XvgParser
+from ..utils import getFileNames
 
-# This should be made to integrate with a larger CLI toolset
-# main() should accept args as input
+
+# CLI registration as subcommand
 def register(subparsers):
     parser = subparsers.add_parser('xvg_min',
                                    help='Print the smallest and largest numbers in each column of an .xvg file')
-    parser.add_argument('filename1',
+    parser.add_argument('filename1', # positional argument
                         nargs='?',
                         default=None,
-                        help='the .xvg file.')           # positional argument
+                        help='the .xvg file.')
     parser.add_argument('-o',
                         '--output',
                         type=str,
                         help='append the output to a file instead of the terminal.')
     parser.set_defaults(func=main)
-
-# This should dissapear
-#def parseArguments():
-#    parser = argparse.ArgumentParser(prog='xvg_min.py',
-#                                     description='Print the smallest and largest numbers in each column of an .xvg file',
-#                                     epilog='Written by Lucas Roeleveld')
-#
-#    parser.add_argument('filename1',
-#                        nargs='?',
-#                        default=None,
-#                        help='the .xvg file.')           # positional argument
-#    parser.add_argument('-o',
-#                        '--output',
-#                        type=str,
-#                        help='append the output to a file instead of the terminal.')
-#    args = parser.parse_args()
-#    return args
-
-
 
 
 def getDataFromXmgrFiles(_filenames):

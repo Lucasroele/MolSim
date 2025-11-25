@@ -1,2 +1,2 @@
 [console_scripts]
-molsim = cli:main
+molsim = molsim.cli:main

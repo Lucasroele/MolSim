@@ -1,0 +1,7 @@
+archive
+commands
+operands
+parsers
+testing
+trash
+utils
