@@ -1,21 +1,58 @@
 import plotly.graph_objects as go
+import sys
 from plotly.subplots import make_subplots
 import os
 import numpy as np
 import itertools
+import argparse
+
+from molsim.utils import getFileNames
+from molsim.parsers.xvgParser import XvgParser
 
 
-def getFileNames(extension):
-    # List all files in the current working directory
-    current_directory = os.getcwd()
-    files_in_directory = os.listdir(current_directory)
-    # Filter out directories from the list
-    filenames = [file for file in files_in_directory \
-                 if os.path.isfile(os.path.join(current_directory, file)) \
-                 and file.endswith(extension)]
-    filenames.sort()
-    return filenames
+def register(subparsers):
+    parser = subparsers.add_parser('plot_xvg',
+                                   help='Plot an .xvg file or all .xvg files in a directory using plotly. If no argument is supplied the xvg files in the working directory will be plotted.')
+    parser = addArguments(parser)
+    parser.set_defaults(func=main)
 
+
+def parseArguments():
+    parser = argparse.ArgumentParser(prog='plot_xvg',
+                                     description='Plot an .xvg file or all .xvg files in a directory using plotly. If no argument is supplied the xvg files in the working directory will be plotted.',
+                                     epilog='Written by Lucas Roeleveld')
+    parser = addArguments(parser)
+    args = parser.parse_args()
+    return args
+
+
+def addArguments(parser):
+    parser.add_argument('filenames',
+                        nargs='?',
+                        default=None,
+                        help='the .xvg file(s).')           # positional argument
+    parser.add_argument('-d',
+                        '--dir',
+                        type=str,
+                        default=None,
+                        help='the directory with .xvg files to be plotted. Only makes sense if no filenames are supplied.')  # optional argument
+    return parser
+
+
+def validateArguments(args):
+    running_folder = os.getcwd()
+    if args.filenames is None:
+        if args.dir is None:
+            args.filenames = getFileNames(".xvg")
+        else:
+            args.filenames = getFileNames(".xvg", path=args.dir)
+        assert len(args.filenames) > 0, "Error: " + "No .xvg files found in " + (args.dir if args.dir is not None else running_folder) + "."
+    elif isinstance(args.filenames, str):
+        assert os.path.exists(args.filename1), "Error: " + "The file `" + args.filenames + "` does not exist."
+    elif isinstance(args.filenames, list):
+        for filename in args.filenames:
+            assert os.path.exists(filename), "Error: " + "The file `" + args.filenames + "` does not exist."
+    return args
 
 def getDataFromXmgrFiles(_filenames):
     """
@@ -79,13 +116,15 @@ def getDataFromXmgrFiles(_filenames):
     return data
 
 
+
 def makeFig(filenames, data):
     # Create 2d list with plot titles
     subplot_titles = [[filename if i < len(data[filename]) - 1 else "" for i in range(data["cols"])] for filename in filenames]
+    print(filenames)
     fig = make_subplots(rows=len(filenames), cols=data["cols"], subplot_titles = list(itertools.chain(*subplot_titles)))
     # Add subplots
     for i, filename in enumerate(filenames):
-        print(filename)
+        print("curveball")
         print(data["y_axis_labels"][filename])
         for j, y in enumerate(data[filename]):
             if j == 0:
@@ -106,12 +145,17 @@ def makeFig(filenames, data):
     return fig
 
 
-def main():
-    filenames = getFileNames(".xvg")
-    data = getDataFromXmgrFiles(filenames)
-    fig = makeFig(filenames, data)
+def main(args):
+    args = validateArguments(args)
+    #XvgParser(args.filenames)
+    #filenames = getFileNames(".xvg")
+    data = getDataFromXmgrFiles(args.filenames)
+    fig = makeFig(args.filenames, data)
     # Display the plot
     fig.show()
 
 
-main()
+
+if __name__ == "__main__":
+    args = parseArguments()
+    main(args)

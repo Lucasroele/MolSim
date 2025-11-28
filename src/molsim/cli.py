@@ -1,4 +1,5 @@
 import argparse
+import sys
 
 def main():
     parser = argparse.ArgumentParser(prog="molsim")
@@ -13,6 +14,10 @@ def main():
 
     from .commands import register_make_posres
     register_make_posres(subparsers)
+
+    if len(sys.argv) == 1:
+        parser.print_help()
+        sys.exit(0)
 
     args = parser.parse_args()  # 'command' is set to subcommand (e.g., xvg_min), 'func' points to the handler
     args.func(args)              # Call the function associated with the chosen subcommand (main from xvg_min.py)

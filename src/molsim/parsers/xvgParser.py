@@ -9,6 +9,9 @@ from plotly.subplots import make_subplots
 
 class XvgParser:
     """
+    Instantiation:
+        xvg = XvgParser(filename_s, path=None)
+    
     filenames = [filename_s]
     data = [np.ndarray]         # Cols in rows
     metadata = [{key, val}]
