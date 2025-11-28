@@ -1,61 +1,55 @@
-import warnings # MDAnalysis throws deprecationwarning on xdrlib which is slated for removal in Python 3.13
-warnings.filterwarnings("ignore", message=".*'xdrlib' is deprecated.*", category=DeprecationWarning)
+#import warnings # MDAnalysis throws deprecationwarning on xdrlib which is slated for removal in Python 3.13
+#warnings.filterwarnings("ignore", message=".*'xdrlib' is deprecated.*", category=DeprecationWarning)
 
-import xdrlib
-import os
-import sys
 import argparse
-import numpy
 import MDAnalysis as mda
 from collections import Counter
-import re
-from math import ceil
+from molsim.utils import getFileNames
+import os
 
-def getFileNames(extension=None, path=None, include_hidden=False):
-    """
-    Returns a list containing the filenames in the working directory or somewhere else
-    """
-    if path is None:  # Use current dir
-        path = os.getcwd()
-    else:
-        assert os.path.exists(path)
-    files_in_directory = os.listdir(path)
-    # Filter out directories from the list
-    if extension is None:
-        filenames = [file for file in files_in_directory
-                     if os.path.isfile(os.path.join(path, file))]
-    else:
-        filenames = [file for file in files_in_directory
-                     if os.path.isfile(os.path.join(path, file))
-                     and file.endswith(extension)]
-    if not include_hidden:
-        for index in range(len(filenames))[::-1]:
-            if filenames[index].startswith('.'):
-                del filenames[index]
-    filenames.sort()
-    return filenames
+#import xdrlib
+#import sys
+#import numpy as np
+#import re
+#from math import ceil
+
+def register(subparsers):
+    parser = subparsers.add_parser('mdCheck',
+                                   help='Print information on a `.gro` or `.pdb` file.')
+    parser = addArguments(parser)
+    parser.set_defaults(func=main)
 
 
 def parseArguments():
     parser = argparse.ArgumentParser(prog='mdCheck',
                                      description='Print information on a `.gro` or `.pdb` file.',
                                      epilog='Written by Lucas Roeleveld')
+    parser = addArguments(parser)
+    args = parser.parse_args()
+    return args
 
+
+def addArguments(parser):
     parser.add_argument('coordfile',
                         help='the coordinate file')
-    args = parser.parse_args()
+    return parser
+
+
+def validateArguments(args):
     SUPPORTED_FILE_EXTENSIONS = [".gro", ".pdb"]
     check = False
     for ext in SUPPORTED_FILE_EXTENSIONS:
         if args.coordfile.endswith(ext):
+            directory, filename = os.path.split(args.coordfile)
             check = True
-            assert args.coordfile in getFileNames(ext), f"Could not find {args.coordfile}"
+            assert filename in getFileNames(ext, directory), f"Could not find {args.coordfile}"
             break
     assert check, f"`{ext}` files are not supported"
     return args
 
 
-def main():
+def main(args):
+    args = validateArguments(args)
     """
     """
     amino_acids = [
@@ -69,7 +63,6 @@ def main():
     ions = ["CL", "NA", "CLA", "SOD"]
     solvent = ["SOL", "H2O", "WAT", "TIP3", "TIP2"]
 
-    args = parseArguments()
     print(f"Characterizing {args.coordfile}")
 
     ###########
@@ -116,5 +109,6 @@ def main():
 
 
 
-
-main()
+if __name__ == "__main__":
+    args = parseArguments()
+    main(args)

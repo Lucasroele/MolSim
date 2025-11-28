@@ -8,7 +8,6 @@ src/molsim/groupLipidsIntoNDX.py
 src/molsim/makeCyclicPeptide.py
 src/molsim/makeLipidNDX.py
 src/molsim/makePosRes.py
-src/molsim/mdCheck.py
 src/molsim/memSplitNDX.py
 src/molsim/pdbMerger.py
 src/molsim/plotxvg.py
@@ -22,6 +21,7 @@ src/molsim.egg-info/top_level.txt
 src/molsim/archive/cyclicpeptides.py
 src/molsim/archive/pdbMerger_unmemoized.py
 src/molsim/commands/__init__.py
+src/molsim/commands/mdCheck.py
 src/molsim/commands/xvg_min.py
 src/molsim/parsers/xvgParser.py
 src/molsim/testing/pdbmerger_test/pdbMerger20-8.py

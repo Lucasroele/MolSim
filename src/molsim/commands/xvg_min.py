@@ -1,24 +1,39 @@
 import sys
 import os
 import numpy as np
+import argparse
 
-from ..parsers.xvgParser import XvgParser
-from ..utils import getFileNames
+from molsim.parsers.xvgParser import XvgParser
+from molsim.utils import getFileNames
 
 
 # CLI registration as subcommand
 def register(subparsers):
     parser = subparsers.add_parser('xvg_min',
-                                   help='Print the smallest and largest numbers in each column of an .xvg file')
-    parser.add_argument('filename1', # positional argument
+                                   help='Print the smallest and largest numbers in each column of a .xvg file')
+    parser = addArguments(parser)
+    parser.set_defaults(func=main)
+
+
+def parseArguments():
+    parser = argparse.ArgumentParser(prog='xvg_min.py',
+                                     description='Print the smallest and largest numbers in each column of a .xvg file',
+                                     epilog='Written by Lucas Roeleveld')
+    parser = addArguments(parser)
+    args = parser.parse_args()
+    return args
+
+
+def addArguments(parser):
+    parser.add_argument('filename1',
                         nargs='?',
                         default=None,
-                        help='the .xvg file.')
+                        help='the .xvg file.')           # positional argument
     parser.add_argument('-o',
                         '--output',
                         type=str,
                         help='append the output to a file instead of the terminal.')
-    parser.set_defaults(func=main)
+    return parser
 
 #def getDataFromXmgrFiles(_filenames):
 #    """
@@ -147,4 +162,5 @@ def main(args):
             #print(f"{xvgObj.metadata[index]['columns'][1]}:\n\tmin: {minmax[i - 1][0]:.3e}\n\tmax: {minmax[i - 1][1]:.3e}")
 
 if __name__ == "__main__":
-    main()
+    args = parseArguments()
+    main(args)
