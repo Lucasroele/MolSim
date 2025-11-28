@@ -35,6 +35,16 @@ def addArguments(parser):
                         help='append the output to a file instead of the terminal.')
     return parser
 
+
+def validateArguments(args):
+    if args.filename1 is None:
+        args.filename1 = getFileNames(".xvg")[0]
+    running_folder = os.getcwd()
+    if not os.path.exists(args.filename1):
+        sys.exit("Error: " + "The file `" + running_folder + "/" + args.filename1 + "` does not exist.")
+    return args
+
+
 #def getDataFromXmgrFiles(_filenames):
 #    """
 #    Assumes that strings are double quote enclosed
@@ -114,13 +124,7 @@ def addArguments(parser):
 
 
 def main(args):
-    #args = parseArguments()
-    if args.filename1 is None:
-        args.filename1 = getFileNames(".xvg")[0]
-    running_folder = os.getcwd()
-    if not os.path.exists(args.filename1):
-        sys.exit("Error: " + "The file `" + running_folder + "/" + args.filename1 + "` does not exist.")
-
+    args = validateArguments(args)
     #data = getDataFromXmgrFiles(args.filename1)
     xvgObj = XvgParser(args.filename1)
     index = 0

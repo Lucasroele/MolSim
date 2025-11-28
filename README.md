@@ -13,5 +13,6 @@ pip install -e .
 ## Usage
 ```bash
 molsim xvg_min src/molsim/operands/dist.xvg
+molsim md_check src/moslim/operands/align.gro
 ```
 

@@ -14,14 +14,14 @@ import os
 #from math import ceil
 
 def register(subparsers):
-    parser = subparsers.add_parser('mdCheck',
+    parser = subparsers.add_parser('md_check',
                                    help='Print information on a `.gro` or `.pdb` file.')
     parser = addArguments(parser)
     parser.set_defaults(func=main)
 
 
 def parseArguments():
-    parser = argparse.ArgumentParser(prog='mdCheck',
+    parser = argparse.ArgumentParser(prog='md_check.py',
                                      description='Print information on a `.gro` or `.pdb` file.',
                                      epilog='Written by Lucas Roeleveld')
     parser = addArguments(parser)
