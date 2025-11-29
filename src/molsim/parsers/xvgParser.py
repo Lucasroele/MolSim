@@ -28,7 +28,7 @@ class XvgParser:
         else:
             raise ValueError("Input must be a string or a list of strings")
         if path is not None:
-            assert os.path.exists(path)
+            assert os.path.exists(path), f"Path `{path}` does not exist"
             assert os.path.isdir(path)
             if not path.endswith('/'):
                 path += '/'
@@ -36,7 +36,7 @@ class XvgParser:
             path = ''
         for i, filename in enumerate(self.filenames):
             assert filename.endswith('.xvg')
-            assert os.path.exists(path + filename)
+            assert os.path.exists(path + filename), f"File {path + filename} does not exist"
             assert os.path.isfile(path + filename)
             self.filenames[i] = path + filename
         for i, filename in enumerate(self.filenames):

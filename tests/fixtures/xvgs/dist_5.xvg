@@ -1,0 +1,6 @@
+@    title "Distance"
+@    xaxis  label "Time (ps)"
+@    yaxis  label "Distance (nm) e"
+@TYPE xy
+      0.005    3.278
+     10.000    3.340

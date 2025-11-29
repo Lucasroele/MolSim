@@ -147,7 +147,10 @@ def makeFig(filenames, data):
 
 def main(args):
     args = validateArguments(args)
-    #XvgParser(args.filenames)
+    if args.dir is not None:
+        print("Note: The --dir argument is ignored when filenames are supplied.")
+    XvgParser(
+    data = XvgParser(args.filenames
     #filenames = getFileNames(".xvg")
     data = getDataFromXmgrFiles(args.filenames)
     fig = makeFig(args.filenames, data)

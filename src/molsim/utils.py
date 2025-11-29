@@ -1,4 +1,26 @@
 import os
+from pathlib import Path
+
+
+def getFileNames(extension=None, path=None, include_hidden=False):
+    """
+    Returns a list containing the filenames in the working directory or somewhere else
+    """
+    if not extension.startswith('.'):
+        extension = '.' + extension
+    if path is None:  # Use current dir
+        path = os.getcwd()
+    path_obj = Path(path)
+    assert path_obj.is_dir(), "The path argument is invalid."
+    # Filter out directories from the list
+    return sorted(
+        file.name
+        for file in path_obj.iterdir()
+        if file.is_file()
+        and (extension is None or file.suffix == extension)
+        and (include_hidden or not file.name.startswith('.'))
+    )
+
 
 def getFileNames(extension=None, path=None, include_hidden=False):
     """
