@@ -106,6 +106,17 @@ class XvgParser:
                 self.data.append(np.array(tempdata))
         self.size = len(self.data)
 
+    def info(self):
+        for i, filename in enumerate(self.filenames):
+            print(f"File {i}: {filename}")
+            print(f"  Title: {self.metadata[i].get('title', 'N/A')}")
+            print(f"  X-axis: {self.metadata[i].get('xaxis', 'N/A')}")
+            print(f"  Y-axis: {self.metadata[i].get('yaxis', 'N/A')}")
+            print(f"  Columns: {self.metadata[i]['columns']}")
+            print(f"  Number of data points: {self.data[i].shape[1]}")
+            print("")
+
+
     def findString(self, list_of_strings):
         """
         ['"a', 'b', 'c"'] -> "a b c"

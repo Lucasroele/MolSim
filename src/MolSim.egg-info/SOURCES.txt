@@ -23,6 +23,7 @@ src/molsim/commands/__init__.py
 src/molsim/commands/make_posres.py
 src/molsim/commands/md_check.py
 src/molsim/commands/xvg_min.py
+src/molsim/parsers/__init__.py
 src/molsim/parsers/xvgParser.py
 src/molsim/testing/pdbmerger_test/pdbMerger20-8.py
 src/molsim/testing/pdbmerger_test/pdbOld.py
