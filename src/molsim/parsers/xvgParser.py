@@ -5,41 +5,54 @@ import polars
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-
+from pathlib import Path
 
 class XvgParser:
     """
     Instantiation:
-        xvg = XvgParser(filename_s, path=None)
-    
-    filenames = [filename_s]
-    data = [np.ndarray]         # Cols in rows
-    metadata = [{key, val}]
-    size = number of entries
+        xvg = XvgParser(filenames, path=None)
+    Arguments:
+        filenames: str | [str] | [Path]
+
+
+
+    self.attributes
+    filenames = [filenames]
+    filepaths = [full paths to files]
+    data      = [np.ndarray]         # Cols in rows
+    metadata  = [{key, val}]
+    path      = path to files
+    size      = number of entries
     """
 
-    def __init__(self, filename_s, path=None):
+    def __init__(self, filenames, path=None):
         self.data = []
         self.metadata = []
-        if isinstance(filename_s, str):
-            self.filenames = [filename_s]
-        elif isinstance(filename_s, list):
-            self.filenames = filename_s
+        # Handle path
+        if isinstance(path, str):
+            self.path = Path(path)
+        elif isinstance(path, Path):
+            self.path = path
         else:
-            raise ValueError("Input must be a string or a list of strings")
-        if path is not None:
-            assert os.path.exists(path), f"Path `{path}` does not exist"
-            assert os.path.isdir(path)
-            if not path.endswith('/'):
-                path += '/'
+            self.path = Path('.')
+        assert self.path.is_dir(), f"The directory `{path}` does not exist."
+        # Prepare filenames
+        if isinstance(filenames, str):
+            self.filenames = [filenames]
+            self.filepaths = [self.path / Path(filenames)]
+        elif isinstance(filenames, list) and len(filenames) > 0 and all(isinstance(f, str) for f in filenames):
+            self.filenames = filenames
+            self.filepaths = [self.path / Path(f) for f in filenames]
+        elif isinstance(filenames, list) and len(filenames) > 0 and all(isinstance(f, Path) for f in filenames):
+            self.filenames = [f.name for f in filenames]
+            self.filepaths = [self.path / f for f in filenames]
         else:
-            path = ''
-        for i, filename in enumerate(self.filenames):
-            assert filename.endswith('.xvg')
-            assert os.path.exists(path + filename), f"File {path + filename} does not exist"
-            assert os.path.isfile(path + filename)
-            self.filenames[i] = path + filename
-        for i, filename in enumerate(self.filenames):
+            raise ValueError("First argument must be a string or a list of strings or list of Paths.")
+        for f in self.filepaths:
+            assert f.suffix == '.xvg', "All files must have the .xvg extension."
+            assert f.is_file(), f"File `{f}` does not exist."
+        # Parse files
+        for i, filename in enumerate(self.filepaths):
             reading_data = False
             tempdata = []
             self.metadata.append({})
@@ -55,47 +68,49 @@ class XvgParser:
                     if len(line.strip(' ')) == 0:
                         prev_line = line
                         continue
-                    if line.startswith('@'):  # parse in column names
+                    if line.startswith('@'):  # parse in metadata
                         infoline = line.split()
                         if len(infoline) <= 2:
                             prev_line = line
                             continue
                         # infolinen will have at least 3 elements
                         if infoline[1] == 'title':
-                            self.metadata[i]['title'] = self.findString(
+                            self.metadata[i]['title'] = self._findString(
                                 infoline[2:])
                         elif infoline[1] == 'xaxis':
                             if infoline[2] == 'label' and len(infoline) > 3:
-                                self.metadata[i]['xaxis'] = self.findString(
+                                self.metadata[i]['xaxis'] = self._findString(
                                     infoline[3:])
                             else:
-                                self.metadata[i]['xaxis'] = self.findString(
+                                self.metadata[i]['xaxis'] = self._findString(
                                     infoline[2:])
                         elif infoline[1] == 'yaxis':
                             if infoline[2] == 'label' and len(infoline) > 3:
-                                self.metadata[i]['yaxis'] = self.findString(
+                                self.metadata[i]['yaxis'] = self._findString(
                                     infoline[3:])
                             else:
-                                self.metadata[i]['yaxis'] = self.findString(
+                                self.metadata[i]['yaxis'] = self._findString(
                                     infoline[2:])
                         elif len(infoline) >= 4 and infoline[2] == "legend" and infoline[1][0] == "s":
                             self.metadata[i]['columns'].append(
-                                self.findString(infoline[3:]))
+                                self._findString(infoline[3:]))
                         elif len(infoline) >= 5 and infoline[1] == "legend" and infoline[2] == "string":
                             self.metadata[i]['columns'].append(
-                                self.findString(infoline[4:]))
+                                self._findString(infoline[4:]))
                         continue
                     # Reading data lines now
                     infoline = line.split()
-                    if not reading_data:
+                    if not reading_data:  # entered only once
                         reading_data = True
                         for cel in infoline:
                             tempdata.append([])
                         if len(self.metadata[i]['columns']) != len(tempdata):
-                            if prev_line == self.metadata[i]['comments'][-1] and prev_line.split() == len(tempdata):
+                            if len(self.metadata[i]['comments']) > 0 and \
+                            prev_line == self.metadata[i]['comments'][-1] and \
+                            prev_line.split() == len(tempdata):
                                 self.metadata[i]['columns'] = [
                                     cel for cel in prev_line.split()]
-                            elif len(self.metadata[i]['columns']) == 1:
+                            elif len(self.metadata[i]['columns']) == len(tempdata) - 1:
                                 self.metadata[i]['columns'].insert(0, '#')
                             else:
                                 self.metadata[i]['columns'] = [
@@ -117,50 +132,16 @@ class XvgParser:
             print("")
 
 
-    def findString(self, list_of_strings):
-        """
-        ['"a', 'b', 'c"'] -> "a b c"
-        """
-        if len(list_of_strings) == 1:
-            return list_of_strings[0].strip('"')
-        ret_string = ''
-        found_start = False
-        for string in list_of_strings:
-            if not found_start and string.startswith('"'):
-                found_start = True
-                ret_string += string
-                continue
-            elif found_start and string.endswith('"'):
-                ret_string += ' ' + string
-                break
-            elif found_start:
-                ret_string += ' ' + string
-        assert len(ret_string) != 0
-        return ret_string.strip('"')
-
-    def indexOfFilename(self, filename):
-        for i, filename_ in enumerate(self.filenames):
-            if filename == filename_:
-                return i
-
-    def indexIsRetrievable(self, index):
-        if isinstance(index, int):
-            assert index in range(self.size)
-        elif isinstance(index, str):
-            assert index in self.filenames
-        else:
-            raise ValueError(f"{index} is not retrievable")
-        return True
 
     def get_numpy(self, index):  # returns as rows of datapoints
-        assert self.indexIsRetrievable(index)
+        assert self._indexIsRetrievable(index)
         if isinstance(index, str):
             return self.data[self.indexOfFilename(index)]
         else:  # Must be int
             return self.data[index]
 
     def get_pandas(self, index):  # returns as columns of datapoints
-        assert self.indexIsRetrievable(index)
+        assert self._indexIsRetrievable(index)
         if isinstance(index, str):
             print(self.metadata[self.indexOfFilename(index)]['columns'])
             return pd.DataFrame(data=self.data[self.indexOfFilename(index)].T,
@@ -170,7 +151,7 @@ class XvgParser:
                                 columns=self.metadata[index]['columns'])
 
     def get_polars(self, index):
-        assert self.indexIsRetrievable(index)
+        assert self._indexIsRetrievable(index)
         if isinstance(index, str):
             return polars.DataFrame(data=self.data[self.indexOfFilename(index)].T,
                                     schema=self.metadata[self.indexOfFilename(index)]['columns'])
@@ -234,3 +215,48 @@ class XvgParser:
         # Update layout
         fig.update_layout(height=300 * len(self.filenames), showlegend=showlegend)
         fig.show()
+
+    def __len__(self):
+        return self.size
+
+    def __getitem__(self, index):
+        return self.get_numpy(index)
+
+    def __iter__(self):
+        for i in range(self.size):
+            yield self.get_numpy(i)
+
+    def _findString(self, list_of_strings):
+        """
+        ['"a', 'b', 'c"'] -> "a b c"
+        """
+        if len(list_of_strings) == 1:
+            return list_of_strings[0].strip('"')
+        ret_string = ''
+        found_start = False
+        for string in list_of_strings:
+            if not found_start and string.startswith('"'):
+                found_start = True
+                ret_string += string
+                continue
+            elif found_start and string.endswith('"'):
+                ret_string += ' ' + string
+                break
+            elif found_start:
+                ret_string += ' ' + string
+        assert len(ret_string) != 0
+        return ret_string.strip('"')
+
+    def _indexOfFilename(self, filename):
+        for i, f in enumerate(self.filenames):
+            if filename == f:
+                return i
+
+    def _indexIsRetrievable(self, index):
+        if isinstance(index, int):
+            assert index in range(self.size)
+        elif isinstance(index, str):
+            assert index in self.filenames
+        else:
+            raise ValueError(f"{index} is not retrievable")
+        return True

@@ -1,34 +1,23 @@
 from molsim.parsers.xvgParser import XvgParser
-from pathlib import Path
+from molsim.utils import getFileNames
 
 
-def test_XvgParser():
-    data = XvgParser("fixtures/xvgs/dist_1.xvg", path=str(Path(__file__).parent.parent.resolve()))
+def test_XvgParser(data_dir):
+    data_1 = XvgParser("xvgs/dist_1.xvg", path=data_dir)
+    filepaths = []
+    for f in getFileNames(".xvg", path=data_dir / "xvgs"):
+        filepaths.append(data_dir / "xvgs" / f)
+    assert data_1.filenames == ["xvgs/dist_1.xvg"]
+
+    data_2 = XvgParser(filepaths)
+    assert data_2.filenames[0] == "dist_1.xvg"
+    assert len(data_2) == len(filepaths)
     
-    assert False, data.filenames
-    #assert data.filenames == ["../fixtures/xvgs/dist_1.xvg"]
+    first_times = []
+    for dataset in data_2:
+        first_times.append(dataset[0][0])
+    assert first_times == [0.001, 0.002, 0.003, 0.004, 0.005, 0.006]
     
-#def test_getFileNames():
-#    # Create some test files
-#    txt_files = ["file1.txt", "file2.txt", "file4.txt"]
-#    log_files = ["file3.log"]
-#    filenames = txt_files + log_files
-#    with tempfile.TemporaryDirectory() as tempdir:
-#        path = Path(tempdir)
-#        for f in filenames:
-#            (path / f).touch()
-#
-#        with patch("os.getcwd", return_value=tempdir):
-#            # Test getting all .txt files
-#            returned_txt_files = getFileNames(".txt")
-#            assert set(txt_files) == set(returned_txt_files)
-#
-#            # Test getting all .log files
-#            returned_log_files = getFileNames(extension="log")
-#            assert isinstance(returned_log_files, list)
-#            assert log_files == returned_log_files
-#
-#        # Test getting all files without filtering by extension
-#        #all_files = getFileNames(tmp_path)
-#        #assert set(all_files) == {str(tmp_path / f) for f in filenames}A
-#
+
+
+    
