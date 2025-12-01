@@ -9,7 +9,7 @@ src/molsim/makeCyclicPeptide.py
 src/molsim/makeLipidNDX.py
 src/molsim/memSplitNDX.py
 src/molsim/pdbMerger.py
-src/molsim/plotxvg.py
+src/molsim/plot_xvg.py
 src/molsim/topologyCyclicizer.py
 src/molsim/utils.py
 src/molsim.egg-info/PKG-INFO
@@ -22,6 +22,7 @@ src/molsim/archive/pdbMerger_unmemoized.py
 src/molsim/commands/__init__.py
 src/molsim/commands/make_posres.py
 src/molsim/commands/md_check.py
+src/molsim/commands/plot_xvg.py
 src/molsim/commands/xvg_min.py
 src/molsim/parsers/__init__.py
 src/molsim/parsers/xvgParser.py

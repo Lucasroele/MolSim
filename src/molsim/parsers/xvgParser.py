@@ -1,4 +1,3 @@
-import os
 import numpy as np
 import pandas as pd
 import polars
@@ -136,16 +135,16 @@ class XvgParser:
     def get_numpy(self, index):  # returns as rows of datapoints
         assert self._indexIsRetrievable(index)
         if isinstance(index, str):
-            return self.data[self.indexOfFilename(index)]
+            return self.data[self._indexOfFilename(index)]
         else:  # Must be int
             return self.data[index]
 
     def get_pandas(self, index):  # returns as columns of datapoints
         assert self._indexIsRetrievable(index)
         if isinstance(index, str):
-            print(self.metadata[self.indexOfFilename(index)]['columns'])
-            return pd.DataFrame(data=self.data[self.indexOfFilename(index)].T,
-                                columns=self.metadata[self.indexOfFilename(index)]['columns'])
+            print(self.metadata[self._indexOfFilename(index)]['columns'])
+            return pd.DataFrame(data=self.data[self._indexOfFilename(index)].T,
+                                columns=self.metadata[self._indexOfFilename(index)]['columns'])
         else:  # Must be int
             return pd.DataFrame(data=self.data[index],
                                 columns=self.metadata[index]['columns'])
@@ -153,8 +152,8 @@ class XvgParser:
     def get_polars(self, index):
         assert self._indexIsRetrievable(index)
         if isinstance(index, str):
-            return polars.DataFrame(data=self.data[self.indexOfFilename(index)].T,
-                                    schema=self.metadata[self.indexOfFilename(index)]['columns'])
+            return polars.DataFrame(data=self.data[self._indexOfFilename(index)].T,
+                                    schema=self.metadata[self._indexOfFilename(index)]['columns'])
         else:
             return polars.DataFrame(data=self.data[index],
                                     schema=self.metadata[index]['columns'])

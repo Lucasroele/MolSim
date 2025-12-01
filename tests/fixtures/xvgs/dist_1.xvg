@@ -2,5 +2,7 @@
 @    xaxis  label "Time (ps)"
 @    yaxis  label "Distance (nm) a"
 @TYPE xy
-      0.001    3.278
-     10.000    3.340
+      0.001    3.278    13
+     10.000    3.340    14
+     20.000    3.241    15
+
