@@ -261,7 +261,7 @@ def parseArguments():
                         nargs=1,
                         type=str,
                         help='write the output to a file instead of the terminal.')
-    parser.add_arguments('-log',
+    parser.add_argument('-log',
                          '--log',
                          nargs=1,
                          type=str,
