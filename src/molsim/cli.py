@@ -18,6 +18,9 @@ def main():
     from .commands import register_plot_xvg
     register_plot_xvg(subparsers)
 
+    from .commands import register_frame_times
+    register_frame_times(subparsers)
+
     if len(sys.argv) == 1:
         parser.print_help()
         sys.exit(0)
