@@ -71,14 +71,14 @@ def main(args):
 
     letter = ['N', 'CA', 'C']
 
-    l = f.readlines()   # lines
+    lines = f.readlines()   # lines
     b = []              # bond lines header line #
     w = []              # dihedral lines header line #
     q = []              # angle lines header line #
     z = []              # cmap lines header line #
 
     # row numbers where these strings are reported
-    for dih, j in enumerate(l):
+    for dih, j in enumerate(lines):
         if '[ bonds ]' in j:
             b.append(dih)
         if '[ dihedrals ]' in j:
@@ -95,21 +95,27 @@ def main(args):
     CA = []  # [<atomnum>]
     C = []  # [<atomnum>]
     i = 0
-    while '[ bonds ]' not in l[i] and i < len(l):
-        d = l[i].split()
-        if not l[i].split():
-            i += 1
+    inside_atoms_block = False
+    for l in lines:
+        d = l.split()
+        if not d:
             continue
+        if l.strip().startswith('[ bonds ]'):
+            break
+        if not inside_atoms_block:
+            if l.strip().startswith('[ atoms ]'):
+                inside_atoms_block = True
+                continue
         if d[0] == ';' or d[0] == '[':
-            i += 1
             continue
-        if d[0].isdigit():
+        if inside_atoms_block and d[0].isdigit():
             res = d[0], d[2], d[4]  # atomnum, resnum, atomtype
             topo.append(res)
-        if d[0].isdigit() and d[4] in letter:
+        if inside_atoms_block and d[0].isdigit() and d[4] in letter:
             bb = d[0], d[4]
             backbone.append(bb)
-        i += 1
+        
+
     for i in range(0, len(backbone)):  # CMAP!!!
         if backbone[i][1] == 'C':
             C.append(backbone[i][0])
@@ -118,54 +124,113 @@ def main(args):
         if backbone[i][1] == 'N':
             N.append(backbone[i][0])
 
+    l = lines
     # This is added to move #include blocks and general information blocks at the bottom of the file to the top
     # It is assumed that all block of information are empty line separated
     # The headers specified in the next line remain at the same place in the file
-    topolblocks = ['[ atoms ]', '[ bonds ]', '[ angles ]', '[ pairs ]', '[ dihedrals ]', '[ impropers ]', '[ cmap ]', '[ moleculetype ]']
+    topolblocks = ['[ moleculetype ]', '[ atoms ]', '[ bonds ]', '[ angles ]', '[ pairs ]', '[ dihedrals ]', '[ impropers ]', '[ cmap ]']
     paragraphs = OrderedDict()
     par_order_in = []
     prologue_end = 0
     i = 0
-    while i < len(l):
-        prev_line_empty = False
-        if 'prologue' not in par_order_in:
-            if i < len(l) and not l[i].strip(' ').startswith('['):
-                par_order_in.append('prologue')
-                paragraphs['prologue'] = []
-            while i < len(l) and not l[i].strip(' ').startswith('['):
-                paragraphs['prologue'].append(l[i])
-                i += 1
-            prologue_end = i
-        # Normal blocks
-        if i < len(l) and l[i].strip(' ').startswith('['):
-            block = l[i].rstrip('\n').strip(' ')
-            if block in par_order_in:
-                block += '_'  # Allows for blocks with the same name
-            par_order_in.append(block)
-            paragraphs[block] = []
-            while i < len(l) and l[i].rstrip('\n').strip(' ') != '':
-                paragraphs[block].append(l[i])
-                i += 1
-            i += 1
-        # # and ; blocks
-        elif i < len(l) and (l[i].strip(' ').startswith('#') or l[i].strip(' ').startswith(';')):
-            i_start = i
-            while i < len(l):
-                if l[i].strip(' ').startswith('#ifdef') or l[i].strip(' ').startswith('#include'):
-                    block = l[i].rstrip('\n').strip(' ')
-                    i = i_start
-                    break
-                elif l[i].rstrip('\n').strip(' ') == '' or i + 1 == len(l):
-                    block = l[i_start].rstrip('\n').strip(' ')
-                    i = i_start
-                    break
-                i += 1
-            par_order_in.append(block)
-            paragraphs[block] = []
-            while i < len(l) and l[i].rstrip('\n').strip(' ') != '':
-                paragraphs[block].append(l[i])
-                i += 1
-            i += 1
+    
+    still_need_prologue = True
+    reading_prologue = False
+    reading_block = False
+    reading_other_block = False
+    for i, l in enumerate(lines):
+        if still_need_prologue:
+            if not reading_prologue:
+                if not l.strip().startswith('['):
+                    par_order_in.append('prologue')
+                    paragraphs['prologue'] = []
+                    reading_prologue = True
+                else:
+                    still_need_prologue = False
+            else: # reading prologue
+                if l.strip().startswith('['):
+                    still_need_prologue = False
+                    prologue_end = i
+                else: # reading prologue
+                    paragraphs['prologue'].append(l)
+        if not reading_block:
+            if l.strip().startswith('['):
+                still_need_prologue = False
+                block = l.rstrip('\n').strip()
+                if block in par_order_in:
+                    block += '_'  # Allows for blocks with the same name
+                par_order_in.append(block)
+                paragraphs[block] = []
+                paragraphs[block].append(l)
+                reading_block = True
+        else: # reading block
+            if not l.rstrip('\n').strip():
+                reading_block = False
+            else:
+                paragraphs[block].append(l)
+        if not reading_block and not reading_other_block:
+            if l.strip().startswith('#') or l.strip().startswith(';'):
+                block = l.rstrip('\n').strip()
+                if block in par_order_in:
+                    block += '_'  # Allows for blocks with the same name
+                par_order_in.append(block)
+                paragraphs[block] = []
+                paragraphs[block].append(l)
+                reading_other_block = True
+        elif not reading_block: # reading block
+            if not l.rstrip('\n').strip():
+                reading_other_block = False
+            else:
+                paragraphs[block].append(l)
+            
+
+    l = lines
+
+
+
+
+#
+#
+#    while i < len(l):
+#        prev_line_empty = False
+#        if 'prologue' not in par_order_in:
+#            if i < len(l) and not l[i].strip(' ').startswith('['):
+#                par_order_in.append('prologue')
+#                paragraphs['prologue'] = []
+#            while i < len(l) and not l[i].strip(' ').startswith('['):
+#                paragraphs['prologue'].append(l[i])
+#                i += 1
+#            prologue_end = i
+#        i += 1
+#        # Normal blocks
+#        if i < len(l) and l[i].strip(' ').startswith('['):
+#            block = l[i].rstrip('\n').strip(' ')
+#            if block in par_order_in:
+#                block += '_'  # Allows for blocks with the same name
+#            par_order_in.append(block)
+#            paragraphs[block] = []
+#            while i < len(l) and l[i].rstrip('\n').strip(' ') != '':
+#                paragraphs[block].append(l[i])
+#                i += 1
+#            i += 1
+#        # # and ; blocks
+#        elif i < len(l) and (l[i].strip(' ').startswith('#') or l[i].strip(' ').startswith(';')):
+#            i_start = i
+#            while i < len(l):
+#                if l[i].strip(' ').startswith('#ifdef') or l[i].strip(' ').startswith('#include'):
+#                    block = l[i].rstrip('\n').strip(' ')
+#                    i = i_start
+#                    break
+#                elif l[i].rstrip('\n').strip(' ') == '' or i + 1 == len(l):
+#                    block = l[i_start].rstrip('\n').strip(' ')
+#                    i = i_start
+#                    break
+#                i += 1
+#            par_order_in.append(block)
+#            paragraphs[block] = []
+#            while i < len(l) and l[i].rstrip('\n').strip(' ') != '':
+#                paragraphs[block].append(l[i])
+#                i += 1
 
 
     remove_these = []
