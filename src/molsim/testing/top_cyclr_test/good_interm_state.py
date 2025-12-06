@@ -129,7 +129,7 @@ def main(args):
     # This is added to move #include blocks and general information blocks at the bottom of the file to the top
     # It is assumed that all block of information are empty line separated
     # The headers specified in the next line remain at the same place in the file
-    topolblocks = ['[ system ]', '[ moleculetype ]', '[ atoms ]', '[ bonds ]', '[ angles ]', '[ pairs ]', '[ dihedrals ]', '[ impropers ]', '[ cmap ]']
+    topolblocks = ['[ moleculetype ]', '[ atoms ]', '[ bonds ]', '[ angles ]', '[ pairs ]', '[ dihedrals ]', '[ impropers ]', '[ cmap ]']
     paragraphs = OrderedDict()
     par_order_in = []
     prologue_end = 0
@@ -139,53 +139,58 @@ def main(args):
     reading_prologue = False
     reading_block = False
     reading_other_block = False
-    block = None
     for i, l in enumerate(lines):
         if still_need_prologue:
-            if reading_prologue:
+            if not reading_prologue:
                 if not l.strip().startswith('['):
-                    paragraphs['prologue'].append(l)
-                    continue
-                else: # reading prologue
+                    par_order_in.append('prologue')
+                    paragraphs['prologue'] = []
+                    reading_prologue = True
+                else:
                     still_need_prologue = False
-                    prologue_end = i
             else: # reading prologue
                 if l.strip().startswith('['):
                     still_need_prologue = False
-                else:
-                    par_order_in.append('prologue')
-                    paragraphs['prologue'] = [l]
-                    reading_prologue = True
-                    continue
-        if not reading_other_block and l.strip().startswith('['):
-            reading_block = True
-            block = l.rstrip('\n').strip()
-            if block in par_order_in:
-                block += '_'  # Allows for blocks with the same name
-            par_order_in.append(block)
-            paragraphs[block] = [l]
-            continue
-        elif not l.rstrip('\n').strip():
-            reading_block = False
-            reading_other_block = False
+                    prologue_end = i
+                else: # reading prologue
+                    paragraphs['prologue'].append(l)
+        if not still_need_prologue and not reading_block:
+            if l.strip().startswith('['):
+                still_need_prologue = False
+                block = l.rstrip('\n').strip()
+                if block in par_order_in:
+                    block += '_'  # Allows for blocks with the same name
+                par_order_in.append(block)
+                paragraphs[block] = []
+                paragraphs[block].append(l)
+                reading_block = True
+                #print(paragraphs['prologue'])
+                print(f"{l} reading block {block}")
+        if reading_block: # reading block
             paragraphs[block].append(l)
-            print(l, i)
-            continue
-        elif not reading_block and not reading_other_block and (l.strip().startswith('#') or l.strip().startswith(';')):
-            reading_other_block = True
-            block = l.rstrip('\n').strip()
-            if block in par_order_in:
-                block += '_'  # Allows for blocks with the same name
-            par_order_in.append(block)
-            paragraphs[block] = [l]
-
-            continue
-        else:
-            paragraphs[block].append(l)
-            continue
-        os.exit('Error: one reason for this error is blocks with empty lines and comments.')
+            print(l)
+            if l.rstrip('\n').strip():
+                reading_block = False
+                print('true')
+            else:
+                print('false')
+                paragraphs[block].append(l)
+        if not still_need_prologue and not reading_block and not reading_other_block:
+            if l.strip().startswith('#') or l.strip().startswith(';'):
+                block = l.rstrip('\n').strip()
+                if block in par_order_in:
+                    block += '_'  # Allows for blocks with the same name
+                par_order_in.append(block)
+                paragraphs[block] = []
+                paragraphs[block].append(l)
+                reading_other_block = True
+        if reading_other_block: # reading block
+            if not l.rstrip('\n').strip():
+                reading_other_block = False
+            else:
+                paragraphs[block].append(l)
             
-    print(paragraphs.keys())
+
     l = lines
 
 
@@ -199,28 +204,6 @@ def main(args):
                 break
     for index in reversed(remove_these):
         del par_order_in[index]
-
-    # #ifdefs to top
-    ifdef_blocks = []
-    for i, parname in enumerate(par_order_in):
-        for l in paragraphs[parname]:
-            if l.startswith('#ifdef'):
-                ifdef_blocks.append(parname)
-
-                break
-
-    # lines to top
-    print(ifdef_blocks)
-    lines_to_top = []
-    for index in ifdef_blocks:
-        for l in paragraphs[index]:
-            lines_to_top.append(l)
-        del paragraphs[index]
-
-
-
-
-
 
     # generate list of the first and last residues
     first = topo[0][1]  # num first resid
@@ -284,8 +267,6 @@ def main(args):
         g.write(line)
     del par_order_in[0]
     del paragraphs['prologue']
-    for line in lines_to_top:
-        g.write(line)
 
     # Write other blocks like `[ system ]` `[ moleculetype ]` `#include`
     for parname in par_order_in:
@@ -297,9 +278,10 @@ def main(args):
                     g.write(line)
                 g.write('\n')
             del paragraphs[parname]
-    l = lines
+
+
     for i, line in enumerate(l):
-        d = line.split()
+        d = l[i].split()
         if i < prologue_end:
             continue
         if not l[i].split():
@@ -358,8 +340,8 @@ def main(args):
             g.write(impr1 + '\n')
             g.write(impr2 + '\n')
             g.write(' ' + '\n')
-        # start writing rest of the file and break loop
-        if line.rstrip('\n') == '[ cmap ]':
+        # Make better condition \/
+        if 'cmap' in d:
             g.write(';  ai    aj    ak    al    am funct'+'\n')
             for i in range(0, len(C)):
                 map = ('%5s %5s %5s %5s %5s %5s \n' %
@@ -369,6 +351,7 @@ def main(args):
             for i, par in enumerate(paragraphs):
                 for line in paragraphs[par]:
                     g.write(line)
+                g.write('\n')
             for line in epilogue:  # Writes the `[ molecules ]` block, which gromacs wants to be at the end of the file
                 g.write(line)
             break

@@ -1,3 +1,4 @@
+;
 ;	File 'topol.top' was generated
 ;	By user: lucasr (1845)
 ;	On host: compute-20-1.local
@@ -25,10 +26,13 @@
 ; Include topology for ions
 #include "./charmm36-mar2019.ff/ions.itp"
 
-[ system ]
-; Name
-Protein in water
+; Include Position restraint file
+#ifdef POSRES
+#include "posre.itp"
+#endif
 
+#ifdef POSRES_WATER
+; Position restraint for each water oxygen
 [ position_restraints ]
 ;  i funct       fcx        fcy        fcz
    1    1       1000       1000       1000
@@ -1127,42 +1131,6 @@ Protein_chain_A     3
    68    70    72    88    90     1 
    88    90    92   100   102     1 
   100   102   104   111     1     1 
-
-;
-;	File 'topol.top' was generated
-;	By user: lucasr (1845)
-;	On host: compute-20-1.local
-;	At date: Thu Aug 24 15:45:23 2023
-;
-;	This is a standalone topology file
-;
-;	Created by:
-;	                :-) GROMACS - gmx pdb2gmx, 2020.4-MODIFIED (-:
-;	
-;	Executable:   /home/spack-user/spack/opt/spack/linux-centos7-broadwell/intel-19.1.3.304/gromacs-2020.4-dhllg5clpve62myu5swl44ncgvz4cj6g/bin/gmx_mpi
-;	Data prefix:  /home/spack-user/spack/opt/spack/linux-centos7-broadwell/intel-19.1.3.304/gromacs-2020.4-dhllg5clpve62myu5swl44ncgvz4cj6g
-;	Working dir:  /home/lucasr/jobs/CRPFFDC/s1/1.Preprocessing
-;	Command line:
-;	  gmx_mpi pdb2gmx -f CRPFFDC_cycl.pdb -ff charmm36-mar2019 -water tip3p -o conf.gro -missing -ter
-;	Force field was read from current directory or a relative path - path added.
-;
-
-; Include forcefield parameters
-#include "./charmm36-mar2019.ff/forcefield.itp"
-
-; Include water topology
-#include "./charmm36-mar2019.ff/tip3p.itp"
-
-; Include topology for ions
-#include "./charmm36-mar2019.ff/ions.itp"
-
-; Include Position restraint file
-#ifdef POSRES
-#include "posre.itp"
-#endif
-
-#ifdef POSRES_WATER
-; Position restraint for each water oxygen
 
 [ molecules ]
 ; Compound        #mols
