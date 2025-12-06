@@ -3,7 +3,6 @@ pyproject.toml
 src/molsim/__init__.py
 src/molsim/cli.py
 src/molsim/countMoleculesIntoTop.py
-src/molsim/frameTimesGetter.py
 src/molsim/groupLipidsIntoNDX.py
 src/molsim/makeCyclicPeptide.py
 src/molsim/makeLipidNDX.py
@@ -23,12 +22,15 @@ src/molsim/commands/frame_times.py
 src/molsim/commands/make_posres.py
 src/molsim/commands/md_check.py
 src/molsim/commands/plot_xvg.py
+src/molsim/commands/top_cyclr.py
 src/molsim/commands/xvg_min.py
+src/molsim/operands/topologyCyclicizer.py
 src/molsim/parsers/__init__.py
 src/molsim/parsers/xvgParser.py
-src/molsim/testing/frameTimes_test/frameTimesGetter.py
 src/molsim/testing/pdbmerger_test/pdbMerger20-8.py
 src/molsim/testing/pdbmerger_test/pdbOld.py
+src/molsim/testing/top_cyclr_test/good_interm_state.py
+src/molsim/testing/top_cyclr_test/top_cyclr.py
 src/molsim/trash/countMoleculesIntoTop19-10.py
 src/molsim/trash/countMoleculesIntoTop23-8.py
 src/molsim/trash/countMoleculesIntoTop6-11.py

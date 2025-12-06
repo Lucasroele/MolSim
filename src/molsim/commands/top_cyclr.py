@@ -27,8 +27,15 @@ from pathlib import Path
 
 # assumes comments inside the .top files never precede a directive line i.e. no `; this is the atoms block` before `[ atoms ]`
 
+def register(subparsers):
+    parser = subparsers.add_parser('top_cyclr',
+                                   help='This script makes a peptide chain in a topology a cyclic peptide.')
+    parser = addArguments(parser)
+    parser.set_defaults(func=main)
+
+
 def parseArguments():
-    parser = argparse.ArgumentParser(prog='topologyCyclicizer.py',
+    parser = argparse.ArgumentParser(prog='top_cyclr.py',
                                      description='This script makes a peptide chain in a topology a cyclic peptide.',
                                      epilog='This script was written by Daria de Raffele and modified by Lucas Roeleveld.')
     parser = addArguments(parser)
@@ -66,7 +73,6 @@ def validateArguments(args):
 def main(args):
     args = validateArguments(args)
 
-    args = parseArguments()
 
     f = open(args.inputFile, 'r')
 
@@ -125,7 +131,6 @@ def main(args):
         if backbone[i][1] == 'N':
             N.append(backbone[i][0])
 
-    l = lines
     # This is added to move #include blocks and general information blocks at the bottom of the file to the top
     # It is assumed that all block of information are empty line separated
     # The headers specified in the next line remain at the same place in the file
@@ -169,7 +174,6 @@ def main(args):
             reading_block = False
             reading_other_block = False
             paragraphs[block].append(l)
-            print(l, i)
             continue
         elif not reading_block and not reading_other_block and (l.strip().startswith('#') or l.strip().startswith(';')):
             reading_other_block = True
@@ -178,19 +182,14 @@ def main(args):
                 block += '_'  # Allows for blocks with the same name
             par_order_in.append(block)
             paragraphs[block] = [l]
-
             continue
         else:
             paragraphs[block].append(l)
             continue
         os.exit('Error: one reason for this error is blocks with empty lines and comments.')
             
-    print(paragraphs.keys())
-    l = lines
-
-
     remove_these = []
-    # remove topolblocks, they will just be read from the input file
+    # remove topolblocks, they will just be read from the input file using daria's stuff
     for i, parname in enumerate(par_order_in):
         for topolblock in topolblocks:
             if parname.startswith(topolblock):
@@ -200,17 +199,17 @@ def main(args):
     for index in reversed(remove_these):
         del par_order_in[index]
 
-    # #ifdefs to top
+    # find `#ifdef`s and `#include`s
     ifdef_blocks = []
     for i, parname in enumerate(par_order_in):
+        if parname == 'prologue':
+            continue
         for l in paragraphs[parname]:
-            if l.startswith('#ifdef'):
+            if l.startswith('#ifdef') or l.startswith('#include'):
                 ifdef_blocks.append(parname)
-
                 break
 
-    # lines to top
-    print(ifdef_blocks)
+    # lines above [ system ] [ atoms ] etc
     lines_to_top = []
     for index in ifdef_blocks:
         for l in paragraphs[index]:
@@ -280,12 +279,14 @@ def main(args):
     g = open(args.output, 'w')
 
     # Write prologue
-    for line in paragraphs['prologue']:
-        g.write(line)
+    for l in paragraphs['prologue']:
+        g.write(l)
+    if l.rstrip('\n').strip():
+        g.write('\n')
     del par_order_in[0]
     del paragraphs['prologue']
-    for line in lines_to_top:
-        g.write(line)
+    for l in lines_to_top:
+        g.write(l)
 
     # Write other blocks like `[ system ]` `[ moleculetype ]` `#include`
     for parname in par_order_in:
@@ -297,23 +298,23 @@ def main(args):
                     g.write(line)
                 g.write('\n')
             del paragraphs[parname]
-    l = lines
-    for i, line in enumerate(l):
-        d = line.split()
+    
+    for i, l in enumerate(lines):
+        d = l.split()
         if i < prologue_end:
             continue
-        if not l[i].split():
+        if not l.rstrip('\n').split(): # prevents derefercing empty lines
             continue
         if i == b[0]:
             g.write('\n')
         if d[0] == ';' or d[0] == '[':
-            g.write(l[i])
+            g.write(l)
         elif d[0].startswith('Protein'):
-            g.write(l[i]+'\n')
+            g.write(l+'\n')
         elif d[0].isdigit() and d[1].isupper():
-            g.write(l[i])
+            g.write(l)
         elif d[0].isdigit() and d[1].isdigit():
-            g.write(l[i])
+            g.write(l)
         if d[0] == lres[-2][0] and d[1] == lres[-1][0] and d[2] == '1':  # Add the new bond as the last one
             g.write(bond + '\n')
             g.write(' ' + '\n')
@@ -326,7 +327,7 @@ def main(args):
             g.write(pair4 + '\n')
         elif d[0] == lres[4][0] and d[1] == lres[-1][0] and d[2] == '1':
             g.write(pair5 + '\n')
-        if d == l[int(q[0])-2].split():
+        if d == lines[int(q[0])-2].split():
             g.write(pair6 + '\n')
             g.write(pair7 + '\n')
             g.write(pair8 + '\n')
@@ -345,7 +346,7 @@ def main(args):
             g.write(died2 + '\n')
         elif d[0] == lres[4][0] and d[1] == lres[2][0] and d[2] == lres[-2][0] and d[3] == lres[-1][0] and d[4] == '9':
             g.write(died3 + '\n')
-        if d == l[int(w[1])-2].split():
+        if d == lines[int(w[1])-2].split():
             g.write(died4 + '\n')
             g.write(died5 + '\n')
             g.write(died6 + '\n')
@@ -354,12 +355,12 @@ def main(args):
             g.write(died9 + '\n')
             g.write(died10 + '\n')
             g.write(' ' + '\n')
-        if d == l[int(z[0])-2].split():
+        if d == lines[int(z[0])-2].split():
             g.write(impr1 + '\n')
             g.write(impr2 + '\n')
             g.write(' ' + '\n')
         # start writing rest of the file and break loop
-        if line.rstrip('\n') == '[ cmap ]':
+        if l.rstrip('\n') == '[ cmap ]':
             g.write(';  ai    aj    ak    al    am funct'+'\n')
             for i in range(0, len(C)):
                 map = ('%5s %5s %5s %5s %5s %5s \n' %

@@ -21,6 +21,9 @@ def main():
     from .commands import register_frame_times
     register_frame_times(subparsers)
 
+    from .commands import register_top_cyclr
+    register_top_cyclr(subparsers)
+
     if len(sys.argv) == 1:
         parser.print_help()
         sys.exit(0)

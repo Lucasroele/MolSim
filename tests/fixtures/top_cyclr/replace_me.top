@@ -26,9 +26,17 @@
 ; Include topology for ions
 #include "./charmm36-mar2019.ff/ions.itp"
 
-[ system ]
-; Name
-Protein in water
+; Include Position restraint file
+#ifdef POSRES
+#include "posre.itp"
+#endif
+
+#ifdef POSRES_WATER
+; Position restraint for each water oxygen
+[ position_restraints ]
+;  i funct       fcx        fcy        fcz
+   1    1       1000       1000       1000
+#endif
 
 [ system ]
 ; Name
@@ -1123,18 +1131,6 @@ Protein_chain_A     3
    68    70    72    88    90     1 
    88    90    92   100   102     1 
   100   102   104   111     1     1 
-
-; Include Position restraint file
-#ifdef POSRES
-#include "posre.itp"
-#endif
-
-#ifdef POSRES_WATER
-; Position restraint for each water oxygen
-[ position_restraints ]
-;  i funct       fcx        fcy        fcz
-   1    1       1000       1000       1000
-#endif
 
 [ molecules ]
 ; Compound        #mols
