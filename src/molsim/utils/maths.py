@@ -31,6 +31,53 @@ def rotationMatrix(axis: np.ndarray, theta):
                      [2 * (bd + ac), 2 * (cd - ab), aa + dd - bb - cc]])
 
 
+@njit
+def cartToCyl(cloud: np.ndarray):
+    """
+    cloud should be a numpy.array of shape (n,3)
+    """
+
+    new_cloud = np.empty_like(cloud)
+    assert len(cloud.shape) == 2
+    assert cloud.shape[1] == 3
+    new_cloud[:, 0] = np.sqrt(
+        np.power(cloud[:, 1], 2) + np.power(cloud[:, 0], 2))
+    new_cloud[:, 1] = np.arctan2(cloud[:, 1], cloud[:, 0])
+    new_cloud[:, 2] = cloud[:, 2]
+    return new_cloud
+
+
+@njit
+def cylToCart(cloud: np.ndarray):
+    """
+    cloud should be a numpy.array of shape (n,3)
+    """
+    new_cloud = np.empty_like(cloud)
+    assert len(cloud.shape) == 2
+    assert cloud.shape[1] == 3
+    new_cloud[:, 0] = cloud[:, 0] * np.cos(cloud[:, 1])
+    new_cloud[:, 1] = cloud[:, 0] * np.sin(cloud[:, 1])
+    new_cloud[:, 2] = cloud[:, 2]
+    return new_cloud
+
+
+@njit
+def distConseqPoints(cloud):
+    """
+    cloud should be a numpy.array of shape (n,3)
+
+    returns a numpy.array of shape (n-1)
+    """
+    assert len(cloud.shape) == 2
+    assert cloud.shape[1] == 3
+    dist = np.empty(cloud.shape[0]-1)
+    for i, vec in enumerate(cloud):
+        if i == 0:
+            continue
+        dist[i-1] = np.linalg.norm(vec - cloud[i-1])
+    return dist
+
+
 def findLstsqPlane(cloud: np.ndarray, order=None, axis=None):
     """
     cloud should be a numpy.array of shape (n,3)
@@ -47,14 +94,14 @@ def findLstsqPlane(cloud: np.ndarray, order=None, axis=None):
     check = []
     eMes = " variable was not specified correctly."
     assert isinstance(cloud, np.ndarray) and len(
-        cloud.shape) == 2 and cloud.shape[1] == 3, "`cloud`" + eMes
+        cloud.shape) == 2 and cloud.shape[1] == 3, "The `cloud`" + eMes
     if order is not None:
-        assert '__len__' in dir(order) and len(order) == 3, "`order`" + eMes
+        assert '__len__' in dir(order) and len(order) == 3, "The `order`" + eMes
         for d in order:
-            assert d in standard_order, "`order`" + eMes
+            assert d in standard_order, "The `order`" + eMes
             check.append(d)
     elif axis is not None:
-        assert axis in standard_order, "`axis`" + eMes
+        assert axis in standard_order, "The `axis`" + eMes
         order = []
         order.append(axis)
         i = 1

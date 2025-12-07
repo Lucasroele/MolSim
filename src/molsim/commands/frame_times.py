@@ -1,7 +1,3 @@
-"""
-Git test test2
-"""
-
 import argparse
 import itertools
 import os

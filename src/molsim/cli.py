@@ -24,6 +24,9 @@ def main():
     from .commands import register_top_cyclr
     register_top_cyclr(subparsers)
 
+    from .commands import register_gen_cpep
+    register_gen_cpep(subparsers)
+    
     if len(sys.argv) == 1:
         parser.print_help()
         sys.exit(0)

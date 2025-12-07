@@ -5,6 +5,16 @@ from .make_posres import register as register_make_posres
 from .plot_xvg import register as register_plot_xvg
 from .frame_times import register as register_frame_times
 from .top_cyclr import register as register_top_cyclr
+from .gen_cpep import register as register_gen_cpep
 
-__all__ = ['register_xvg_min', 'register_md_check', 'register_make_posres', 'register_plot_xvg', 'register_frame_times', 'register_top_cyclr']
+__all__ = [
+    'register_xvg_min',
+    'register_md_check',
+    'register_make_posres',
+    'register_plot_xvg',
+    'register_frame_times',
+    'register_top_cyclr',
+    'register_gen_cpep'
+]
+
 

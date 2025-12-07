@@ -15,14 +15,14 @@ from molsim.utils.maths import cylToCart
 
 
 def register(subparsers):
-    parser = subparsers.add_parser('cpep_gen',
+    parser = subparsers.add_parser('gen_cpep',
                                    help='Creates a pdb file with a cyclic peptide oriented in space as a ring with its terminal nitrogen and oxygen overlapping.')
     parser = addArguments(parser)
     parser.set_defaults(func=main)
 
 
 def parseArguments():
-    parser = argparse.ArgumentParser(prog='cpep_gen.py',
+    parser = argparse.ArgumentParser(prog='gen_cpep.py',
                                      description='Creates a pdb file with a cyclic peptide oriented in space as a ring with its terminal nitrogen and oxygen overlapping.',
                                      epilog='')
     parser = addArguments(parser)
@@ -36,7 +36,8 @@ def addArguments(parser):
                         "--output",
                         type=str,
                         nargs='?',
-                        help='name of the output which defaults to `output.pdb`')
+                        default=None,
+                        help='name of the output which defaults to `<aastring>_cycl.pdb`')
     parser.add_argument('-id',
                         '--newChainID',
                         type=str,

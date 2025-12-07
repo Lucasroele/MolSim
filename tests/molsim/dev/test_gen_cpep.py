@@ -11,7 +11,7 @@ def test_script_generates_expected_file(data_dir):
     # Run your script as a subprocess
     # Replace 'python' and 'script.py' with the correct command if needed
     subprocess.run(
-        ["python3", "src/molsim/dev/gen_cpep.py", "AAAAA", '-o', str(output_file)],  # add other args if needed
+            ["python3", "src/molsim/dev/gen_cpep.py", "AAAAA", '-o', str(output_file), '-f'],  # add other args if needed
         check=True
     )
 

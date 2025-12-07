@@ -1,36 +1,19 @@
 import Bio.PDB
+import os
+import sys
 import PeptideBuilder
 from PeptideBuilder import Geometry
 import argparse
 import math
 import numpy as np
-from pathlib import Path
-
-from molsim.utils.maths import findLstsqPlane
-from molsim.utils.maths import rotationMatrix
-from molsim.utils.maths import angleBetween
-from molsim.utils.maths import distConseqPoints
-from molsim.utils.maths import cartToCyl
-from molsim.utils.maths import cylToCart
-
-
-def register(subparsers):
-    parser = subparsers.add_parser('cpep_gen',
-                                   help='Creates a pdb file with a cyclic peptide oriented in space as a ring with its terminal nitrogen and oxygen overlapping.')
-    parser = addArguments(parser)
-    parser.set_defaults(func=main)
+from numba import njit
+from scipy.linalg import lstsq
 
 
 def parseArguments():
-    parser = argparse.ArgumentParser(prog='cpep_gen.py',
-                                     description='Creates a pdb file with a cyclic peptide oriented in space as a ring with its terminal nitrogen and oxygen overlapping.',
+    parser = argparse.ArgumentParser(prog='pdbMerger.py',
+                                     description='Creates a pdb file with a cyclic peptide oriented in space with its teminal nitrogen and oxygen overlapping.',
                                      epilog='')
-    parser = addArguments(parser)
-    args = parser.parse_args()
-    return args
-
-
-def addArguments(parser):
     parser.add_argument('aastring')
     parser.add_argument("-o",
                         "--output",
@@ -54,41 +37,140 @@ def addArguments(parser):
                         '--verbose',
                         action='store_true',
                         help='turn on MDAnalysis warnings')
-    parser.add_argument('-f',
-                        '--force',
-                        action='store_true',
-                        help='force overwrite of output file')
     parser.add_argument('-hn',
                         '--termHN',
                         action='store_true',
                         help='add a hydrogen to the terminal N')
-    return parser
-
-
-def validateArguments(args):
-    assert len(args.aastring) > 4, "Cyclic peptides are physically unstable with less than 4 amino acids."
-    all_aa = "ACDEFGHIKLMNPQRSTVWY"
-    assert all(aa.upper() in all_aa for aa in args.aastring), "Please provide a valid string of amino acid residue letters."
-    if args.output is not None:
-        out_path = Path(args.output)
-        assert not out_path.is_file() or args.force, "Output file already exists. Use -f to overwrite."
-        if not args.output.endswith(".pdb"):
-            args.output = args.output + ".pdb"
-        else:
-            args.output = args.output
-    else:
-        args.output = f"{args.aastring}_cycl.pdb"
+    args = parser.parse_args()
     return args
 
 
-def main(args):
+def FindLstsqPlane(cloud: np.ndarray, order=None, axis=None):
     """
-    Creates a pdb file with a peptide in a ring conformation.
+    cloud should be a numpy.array
+    order is a three element ordered permutation of [0,1,2] where in terms of dimensions fit(order[0,1]) = order[2]
+    axis only used if order not specified
+    axis tells which axis should be in the plane 0=x 1=y 2=z
+    the returned order is which columns are used at the respective index
+    fit[0] * cloud[order[0]] + fit[1] * cloud[order[1]] + fit[2] ~= cloud[order[2]]
     """
-    args = validateArguments(args)
+    standard_order = [0, 1, 2]
+    others = [1, 2]
+    check = [3, 3, 3]
+    eMes = " variable was not specified correctly."
+    assert isinstance(cloud, np.ndarray) and len(
+        cloud.shape) == 2 and cloud.shape[1] == 3, "`cloud`" + eMes
+    if order is not None:
+        assert '__len__' in dir(order) and len(order) == 3, "`order`" + eMes
+        for d in order:
+            assert d in standard_order and d not in check, "`order`" + eMes
+            check[d] = d
+    elif axis is not None:
+        assert axis in standard_order, "`axis`" + eMes
+        order[0] = axis
+        i = 1
+        for d in standard_order:
+            if axis != d:
+                others[i - 1] = d
+                i += 1
+        if max(cloud[:, others[0]]) - min(cloud[:, others[0]]) < max(cloud[:, others[1]]) - min(cloud[:, others[1]]):
+            order[1] = others[0]
+            order[2] = others[1]
+        else:
+            order[1] = others[1]
+            order[2] = others[0]
+    else:
+        order = standard_order
+    A = np.hstack((cloud[:, [order[0], order[1]]],
+                  np.ones((cloud.shape[0], 1))))
+    b = cloud[:, order[2]]
+    fit, residual, rnk, s = lstsq(A, b)
+    return fit, order
 
 
-    offset = 360 / (len(args.aastring) - 0.5) * math.sqrt(3) / 2
+def angleBetween(v1: np.ndarray, v2: np.ndarray):
+    """
+    Returns the angle between 2 vectors
+    """
+    v1_u = v1 / np.linalg.norm(v1)  # normalizes v1
+    v2_u = v2 / np.linalg.norm(v2)  # normalizes v2
+    return np.arccos(np.clip(np.dot(v1_u, v2_u), -1.0, 1.0))
+
+
+@njit
+def rotationMatrix(axis: np.ndarray, theta):
+    """
+    returns rotation matrix
+    theta in radians
+    Rotation follows the right hand rule with thumb along axis direction
+    """
+    axis = np.asarray(axis.flatten())
+    axis = -axis / math.sqrt(np.dot(axis, axis))
+    a = math.cos(theta / 2.0)
+    b, c, d = -axis * math.sin(theta / 2.0)
+    aa, bb, cc, dd = a * a, b * b, c * c, d * d
+    bc, ad, ac, ab, bd, cd = b * c, a * d, a * c, a * b, b * d, c * d
+    return np.array([[aa + bb - cc - dd, 2 * (bc + ad), 2 * (bd - ac)],
+                     [2 * (bc - ad), aa + cc - bb - dd, 2 * (cd + ab)],
+                     [2 * (bd + ac), 2 * (cd - ab), aa + dd - bb - cc]])
+
+
+@njit
+def CartToCyl(cloud):
+    new_cloud = np.empty_like(cloud)
+    assert len(cloud.shape) == 2
+    assert cloud.shape[1] == 3
+    new_cloud[:, 0] = np.sqrt(
+        np.power(cloud[:, 1], 2) + np.power(cloud[:, 0], 2))
+    new_cloud[:, 1] = np.arctan2(cloud[:, 1], cloud[:, 0])
+    new_cloud[:, 2] = cloud[:, 2]
+    return new_cloud
+
+
+@njit
+def CylToCart(cloud):
+    new_cloud = np.empty_like(cloud)
+    assert len(cloud.shape) == 2
+    assert cloud.shape[1] == 3
+    new_cloud[:, 0] = cloud[:, 0] * np.cos(cloud[:, 1])
+    new_cloud[:, 1] = cloud[:, 0] * np.sin(cloud[:, 1])
+    new_cloud[:, 2] = cloud[:, 2]
+    return new_cloud
+
+
+@njit
+def DistConseqPoints(cloud):
+    assert len(cloud.shape) == 2
+    assert cloud.shape[1] == 3
+    dist = np.empty(cloud.shape[0]-1)
+    for i, vec in enumerate(cloud):
+        if i == 0:
+            continue
+        dist[i-1] = np.sum(np.sqrt(np.power(np.abs(vec - cloud[i-1]), 2)))
+    return dist
+
+
+def main():
+    """
+    Creates a pdb file with a helical peptide.
+    """
+    args = parseArguments()
+    all_aa = "ACDEFGHIKLMNPQRSTVWY"
+    peplen = len(args.aastring)
+    if peplen < 5:
+        sys.exit(
+            "Cyclic peptides are physically unstable with less than 4 amino acids.")
+    for aa in args.aastring:
+        assert aa.upper() in all_aa, "Please provide a valid string of amino acid residue letters."
+    if args.output is not None:
+        if not args.output.endswith(".pdb"):
+            output_file = args.output + ".pdb"
+        else:
+            output_file = args.output
+    else:
+        output_file = f"{args.aastring}_cycl.pdb"
+
+    offset = 360 / (peplen - 0.5) * math.sqrt(3) / 2
 #    if args.allAngles is not None:
 #        args.phi = args.allAngles
 #        args.psi_im1 = args.allAngles
@@ -129,7 +211,7 @@ def main(args):
     firstNcoords -= cog_ring
 
     # Move into xy plane
-    fit, order = findLstsqPlane(CCN_coords)
+    fit, order = FindLstsqPlane(CCN_coords)
     vecs_in_plane = np.zeros((2, 3))  # use for normal_to_plane finding
     for i in range(2):
         vecs_in_plane[i][i] = 1
@@ -156,9 +238,9 @@ def main(args):
     # Work with cyl coords from here
     ###
 
-    cyl_coords = cartToCyl(coords)
-    cyl_CCN_coords = cartToCyl(CCN_coords)
-    cyl_firstNcoords = cartToCyl(firstNcoords)
+    cyl_coords = CartToCyl(coords)
+    cyl_CCN_coords = CartToCyl(CCN_coords)
+    cyl_firstNcoords = CartToCyl(firstNcoords)
 
     # Put N at y=0
     cyl_coords[:, 1] -= cyl_firstNcoords[:, 1]
@@ -202,12 +284,12 @@ def main(args):
         m_a["a"][i][0] = cyl_coords[i][0] + dist_diff
         m_a["a"][i][1] = cyl_coords[i][1] * scale_ang
         m_a["a"][i][2] = cyl_coords[i][2]
-    dist_before = distConseqPoints(cylToCart(cyl_coords))
-    m_a["m"] = cylToCart(m_a["m"])
-    m_a["a"] = cylToCart(m_a["a"])
+    dist_before = DistConseqPoints(CylToCart(cyl_coords))
+    m_a["m"] = CylToCart(m_a["m"])
+    m_a["a"] = CylToCart(m_a["a"])
     dist_after = {}
-    dist_after["m"] = distConseqPoints(m_a["m"])
-    dist_after["a"] = distConseqPoints(m_a["a"])
+    dist_after["m"] = DistConseqPoints(m_a["m"])
+    dist_after["a"] = DistConseqPoints(m_a["a"])
 
     # Choose the better, delete the other
     if np.sum(np.abs(dist_after["m"] - dist_before)) < np.sum(np.abs(dist_after["a"] - dist_before)):
@@ -239,12 +321,10 @@ def main(args):
         print("A hydrogen atom was added to the first residue in the chain labeled `HN`")
     out = Bio.PDB.PDBIO()
     out.set_structure(structure)
-    out.save(args.output)
+    out.save(output_file)
 
     print(
-        f"A 3D structure of the peptide represented by amino acid sequence `{args.aastring.upper()}` was stored in `{args.output}`.")
+        f"A 3D structure of the peptide represented by amino acid sequence `{args.aastring.upper()}` was stored in `{output_file}`.")
 
 
-if __name__ == "__main__":
-    args = parseArguments()
-    main(args)
+main()
