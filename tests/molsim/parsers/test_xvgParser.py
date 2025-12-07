@@ -1,5 +1,5 @@
 from molsim.parsers.xvgParser import XvgParser
-from molsim.utils import getFileNames
+from molsim.utils.files import getFileNames
 
 
 def test_XvgParser(data_dir):

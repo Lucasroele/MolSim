@@ -4,7 +4,7 @@
 import argparse
 import MDAnalysis as mda
 from collections import Counter
-from molsim.utils import getFileNames
+from molsim.utils.files import getFileNames
 import os
 
 #import xdrlib

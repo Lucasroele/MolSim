@@ -9,7 +9,6 @@ import numpy as np
 from pathlib import Path
 
 from molsim.parsers import XvgParser
-#from molsim.utils import getFileNames
 
 
 def register(subparsers):

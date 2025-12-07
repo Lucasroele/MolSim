@@ -3,7 +3,7 @@ import argparse
 import sys
 
 
-from molsim.utils import getFileNames
+from molsim.utils.files import getFileNames
 
 
 def register(subparsers):

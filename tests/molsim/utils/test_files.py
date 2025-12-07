@@ -1,4 +1,4 @@
-from molsim.utils import getFileNames
+from molsim.utils.files import getFileNames
 import tempfile
 from unittest.mock import patch
 from pathlib import Path

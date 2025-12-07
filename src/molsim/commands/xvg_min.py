@@ -1,10 +1,9 @@
 import sys
 import os
-import numpy as np
 import argparse
 
 from molsim.parsers.xvgParser import XvgParser
-from molsim.utils import getFileNames
+from molsim.utils.files import getFileNames
 
 
 # CLI registration as subcommand

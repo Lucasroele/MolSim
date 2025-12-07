@@ -5,7 +5,7 @@ import itertools
 import argparse
 from pathlib import Path
 
-from molsim.utils import getFileNames
+from molsim.utils.files import getFileNames
 from molsim.parsers.xvgParser import XvgParser
 
 
