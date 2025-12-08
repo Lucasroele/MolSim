@@ -1135,6 +1135,8 @@ Protein_chain_A     3
 [ molecules ]
 ; abc def ghi
 ; Compound        #mols
+Protein_chain_A       1
 SOL                8611
 NA                    4
 CL                    4
+POPC                106

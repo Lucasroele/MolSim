@@ -179,13 +179,11 @@ def main(args):
                 break
 
         ### Output formatting
-        ## entirely for reading header comment which default to '; Compounds #mols'
+        ## entirely for reading header comment which default to '; Compound #mols'
         header_comment_j = None
         if comment_j is not None:
             for j in comment_j:
-                print(j,min(subset_indices))
                 if min(subset_indices) - j == 1:
-                    print(j)
                     if len(molecules_block[j].split()) == 3:
                         header_comment_j = j
                         header_comment = molecules_block[j].rstrip('\n')
@@ -213,7 +211,6 @@ def main(args):
         ##
         ## Creating the header comment
         if header_comment_j is not None:
-            print(header_comment)
             header_comment = (header_comment.split()[0] + ' ' + \
                               header_comment.split()[1]).ljust(maxlen[0], ' ') + \
                              header_comment.split()[2].rjust(maxlen[1], ' ') + '\n'
@@ -241,11 +238,16 @@ def main(args):
                 new_lines.append(line)
         if args.addMols:
             for key, val in addMols.items():
+                if key in mol_counter.keys():
+                    mol_counter[key] += val
+                    continue
                 new_lines.append(key.ljust(maxlen[0], ' ') + str(val).rjust(maxlen[1], ' ') + '\n')
-            # Append other molecules counted in the file
-            if not args.dontAdd and len(mol_counter) > 0:
-                for key in mol_counter:
-                    new_lines.append(key.ljust(maxlen[0], ' ') + str(mol_counter[key]).rjust(maxlen[1], ' ') + '\n')
+        # Append other molecules counted in the file
+        if not args.dontAdd and len(mol_counter) > 0:
+            for key in mol_counter:
+                new_lines.append(key.ljust(maxlen[0], ' ') + str(mol_counter[key]).rjust(maxlen[1], ' ') + '\n')
+
+        
         new_lines.append('\n')
     elif j == 0: # Creating a molecules block
         if args.skiplines:

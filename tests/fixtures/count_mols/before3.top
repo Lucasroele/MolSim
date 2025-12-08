@@ -1131,10 +1131,3 @@ Protein_chain_A     3
 ;  i funct       fcx        fcy        fcz
    1    1       1000       1000       1000
 #endif
-
-[ molecules ]
-; abc def ghi
-; Compound        #mols
-SOL                8611
-NA                    4
-CL                    4
