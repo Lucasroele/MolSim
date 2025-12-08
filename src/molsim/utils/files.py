@@ -6,8 +6,10 @@ def getFileNames(extension=None, path=None, include_hidden=False):
     """
     Returns a list containing the filenames in the working directory or somewhere else
     """
-    if not extension.startswith('.'):
+    if ( extension is not None or extension != '' ) and not extension.startswith('.'):
         extension = '.' + extension
+    elif extension is None:
+        extension = ''
     if path is None:  # Use current dir
         path = os.getcwd()
     path_obj = Path(path)

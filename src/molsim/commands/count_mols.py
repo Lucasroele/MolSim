@@ -296,6 +296,7 @@ def main(args):
 
     with open(args.output, 'w') as file:
         file.writelines(lines)
+    print(f"\nNew topology was stored in `{args.output}`.")
 
 if __name__ == '__main__':
     args = parseArguments()
