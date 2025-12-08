@@ -1,56 +1,66 @@
-import warnings # MDAnalysis throws deprecationwarning on xdrlib which is slated for removal in Python 3.13
-warnings.filterwarnings("ignore", message=".*'xdrlib' is deprecated.*", category=DeprecationWarning)
-
-import xdrlib
 import os
 import sys
 import argparse
-import numpy
 import MDAnalysis as mda
 from collections import Counter
 import re
-from math import ceil
+from pathlib import Path
 
 def parseArguments():
-    parser = argparse.ArgumentParser(prog='countMoleculesIntoTop.py',
+    parser = argparse.ArgumentParser(prog='count_mols.py',
                                      description='Make the `[ molecules ]` block moleculenames in the second file (.top) match the residuenames present in the first file (.gro). Any moleculename not present in the second file is left unaltered.',
                                      epilog='Written by Lucas Roeleveld')
+    parser = addArguments(parser)
+    args = parser.parse_args()
+    return args
 
+
+def addArguments(parser):
     parser.add_argument('coordfile',
                         help='the coordinate file')
     parser.add_argument('topfile',
                         help='the .top file')
     parser.add_argument('-o',
                         '--output',
-                        default='topol.top',
                         help='specify a different output file')
     parser.add_argument('-sl',
                         '--skiplines',
-                        default=0,
+                        default=None,
                         type=int,
-                        help='set this to explicitly approve a number of lines inside the molecule block')
+                        help='Set this to explicitly approve a number of lines inside the molecule block. Useful for macromolecules.')
     parser.add_argument('-dontAdd',
                         action='store_true',
-                        help='set this to refraim from counting molecules into the topology that arent there yet')
+                        help='Set this to refraim from counting molecules into the topology that arent there yet.')
     parser.add_argument('-am',
                         '--addMols',
                         type=str,
                         default=None,
-                        help='add lines to the molecules block with the given names')
-    args = parser.parse_args()
+                        help='Add extra molecules to the molecules block with the given names.')
+    parser.add_argument('-f',
+                        '--force',
+                        action='store_true',
+                        help='Overwrite the output file if it already exists.')
+    return parser
+
+
+def validateArguments(args):
     if args.addMols is not None:
         split_input = args.addMols.split()
-        assert len(split_input) % 2 == 0 or len(split_input) == 1, "misformatted args.addMols argument, use either a single name to add a single molecule or space separated name-number pairs"
-        if len(split_input) > 1:
-            for i in range(0,len(split_input),2):
-                try:
-                    int(split_input[i+1])
-                except:
-                    sys.exit(f"`{args.addMols}` should be name-number pairs separated by spaces")
+        len_split = len(split_input)
+        assert len_split % 2 == 0 or len_split == 1, "misformatted args.addMols argument, use either a single name to add a single molecule or space separated name-number pairs"
+        if len_split > 1:
+            for i in range(0,len_split,2):
+                assert split_input[i+1].isdigit(), f"`{args.addMols}` should be a string of name-number pairs separated by spaces"
+    assert Path(args.coordfile).is_file(), f"Coordinate file `{args.coordfile}` does not exist"
+    assert Path(args.topfile).is_file(), f"Topology file `{args.topfile}` does not exist"
+    if args.output is None:
+        args.output = args.topfile
+    else:
+        assert not Path(args.output).is_file() or args.force, f"Output file `{args.output}` already exists and `-f` was not used"
     return args
 
 
-def main():
+def main(args):
     """
     !!! args.addMols and addMols are missbehaving
 
@@ -59,8 +69,9 @@ def main():
     OUTPUT
         .top
 
-    python3 countMoleculesIntoTop.py input.gro -p topol.top
+    python3 count_mols.py input.gro topol.top
     """
+    args = validateArguments(args)
     amino_acids = [
         "ALA", "ARG", "ASN", "ASP", "CYS", "GLN", "GLU", "GLY",
         "HIS", "ILE", "LEU", "LYS", "MET", "PHE", "PRO", "SER",
@@ -69,18 +80,6 @@ def main():
     ]
     spacer = 3
 
-    args = parseArguments()
-    if args.output is not None:
-        outfile = args.output
-    else:
-        outfile = args.topfile
-
-    running_folder = os.getcwd()
-
-    if not os.path.exists(args.coordfile):
-        sys.exit("Error: The file `" + running_folder + "/" + args.coordfile + "` does not exist.")
-    if not os.path.exists(args.topfile):
-        sys.exit("Error: The file `" + running_folder + "/" + args.topfile + "` does not exist.")
 
     if args.addMols is not None:
         split_input = args.addMols.split()
@@ -99,19 +98,21 @@ def main():
         if aa in mol_counter.keys():
             del mol_counter[aa]
 
+
     start_marker = r"\s*\[ molecules \]\s*"
-    end_marker = r"\s*\[ (.*?) \]\s*"
+    # old end_marker = r"\s*\[ (.*?) \]\s*"
+    end_marker = r"\s*\[ (.*?) \]\s*|\s*#.*"
     molecules_block = []  # Filled with the molecules block (also empty lines)
-    mols_n_counts = [[], []]  # What is inside the .top file # one entry in both lists for each molecule line
+    mols_n_counts = [[], []]  # What is inside the .top file, one entry in both lists for each molecule line
 
     with open(args.topfile, "r") as file:
         lines = file.readlines()
 
-    subset_indices = []  # indices to molecules_block
+    subset_indices = []  # indices to lines inside molecules_block that have data
     # fill mols_n_counts
     inside_marker = 0
+    comment_j = []
     j = 0
-    # This fails when the `molecules` block is followed by a # instead of a [
     for i, line in enumerate(lines):
         if not inside_marker:
             if re.match(start_marker, line):
@@ -120,6 +121,7 @@ def main():
         elif re.match(";", line) or re.match(r"\s*\n", line):
             j += 1
             molecules_block.append(line)
+            comment_j.append(j)
             continue
         elif re.match(end_marker, line):
             break
@@ -136,28 +138,28 @@ def main():
         sys.exit("There is nothing to count or change.")
 
     new_lines = []
-    if j != 0:  # `[ molecules ]` block found
+    if inside_marker:  # `[ molecules ]` block found
         # counting update
-        assert args.skiplines in range(len(subset_indices) + 1), 'trying to skip an impossible number of lines in the molecules block.'
+        assert args.skiplines is None or args.skiplines in range(len(subset_indices) + 1), 'Trying to skip more lines than there are in the `[ molecules ]` block'
         remove_these_lines = []  # Will hold the line indices of the lines in the molcules block that should be discarded
-        #j = 0
         if len(subset_indices) > 1:
             for i, index in enumerate(subset_indices):
-                if i < args.skiplines: # Still need to empty mol_counter
+                if args.skiplines is not None and i < args.skiplines: # Still need to empty mol_counter
                     if args.addMols is not None:
                         assert molecules_block[index].split()[0] not in addMols.keys(), f"You can not add `{molecules_block[index].split()[0]}` and also skip the line it is in"  # Is this line actually needed?
                     if molecules_block[index].split()[0] in mol_counter:
                         del mol_counter[molecules_block[index].split()[0]]
                     continue
                 if mols_n_counts[0][i] in mol_counter:
-                    if args.addMols and mols_n_counts[0][i] in addMols.keys():
+                    # adding to existing lines
+                    if args.addMols is not None and mols_n_counts[0][i] in addMols.keys():
                         mol_counter[mols_n_counts[0][i]] += addMols[mols_n_counts[0][i]]
                         del addMols[mols_n_counts[0][i]]
                     mols_n_counts[1][i] = mol_counter[mols_n_counts[0][i]]
                     del mol_counter[mols_n_counts[0][i]]
-                else:
+                else: # the line present inside `*.top` is bs and should be removed
                     remove_these_lines.append(index)
-            # remove the lines from the list
+            # remove the `[ molecules ]` block lines inside the .top file
             for i in range(j + 1):
                 del lines[inside_marker]
 
@@ -170,9 +172,22 @@ def main():
                 break
 
         ### Output formatting
+        ## entirely for reading header comment which default to '; Compounds #mols'
+        header_comment_j = None
+        if comment_j is not None:
+            for j in comment_j:
+                print(j,min(subset_indices))
+                if min(subset_indices) - j == 1:
+                    print(j)
+                    if len(molecules_block[j].split()) == 3:
+                        header_comment_j = j
+                        header_comment = molecules_block[j].rstrip('\n')
+                        header_comment_len = [len(' '.join(header_comment.split()[0:1])) + spacer, len(header_comment.split()[-1])]
+        
+        ## assessing justification
         maxlen = [max([len(str_) for str_ in mols_n_counts[0]]) + spacer,
                   max([len(str(str_)) for str_ in mols_n_counts[1]])]
-        for i, val in enumerate([14,9]):
+        for i, val in enumerate([10,5]): # 10 for molecule name, 5 for number and '#mols'
             maxlen[i] = max(val, maxlen[i])
         for i, line in enumerate(molecules_block):
             if i in subset_indices:
@@ -184,7 +199,20 @@ def main():
                     maxlen[0] = len(key) + spacer
                 if len(str(val)) > maxlen[1]:
                     maxlen[1] = len(str(val))
-
+        if header_comment_j is not None:
+            for i, val in enumerate(header_comment_len):
+                if val > maxlen[i]:
+                    maxlen[i] = val
+        ##
+        ## Creating the header comment
+        if header_comment_j is not None:
+            print(header_comment)
+            header_comment = (header_comment.split()[0] + ' ' + \
+                              header_comment.split()[1]).ljust(maxlen[0], ' ') + \
+                             header_comment.split()[2].rjust(maxlen[1], ' ') + '\n'
+        else:
+            header_comment = '; Compound'.ljust(maxlen[0], ' ') + '#mols'.rjust(maxlen[1], ' ') + '\n'
+        ##
         ###
 
         # make the new lines
@@ -193,12 +221,15 @@ def main():
             if i in remove_these_lines:  # Do nothing or comment the line
                 if i in subset_indices:  # Need to increase j to access correct mols_n_counts
                     j += 1
-                if args.topfile == outfile:
+                if args.topfile == args.output: # might actually need the line
                     new_lines.append('; ' + line)
-                    continue
             elif i in subset_indices:
+                if i == min(subset_indices) and header_comment_j is None:
+                    new_lines.append(header_comment)
                 new_lines.append(mols_n_counts[0][j].ljust(maxlen[0], ' ') + str(mols_n_counts[1][j]).rjust(maxlen[1], ' ') + '\n')
                 j += 1
+            elif header_comment_j is not None and i == header_comment_j:
+                new_lines.append(header_comment)
             else:
                 new_lines.append(line)
         if args.addMols:
@@ -254,8 +285,9 @@ def main():
         else:
             break
 
-    with open(outfile, 'w') as file:
+    with open(args.output, 'w') as file:
         file.writelines(lines)
 
-
-main()
+if __name__ == '__main__':
+    args = parseArguments()
+    main(args)

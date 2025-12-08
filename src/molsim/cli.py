@@ -26,6 +26,9 @@ def main():
 
     from .commands import register_gen_cpep
     register_gen_cpep(subparsers)
+
+    from .commands import register_count_mols
+    register_count_mols(subparsers)
     
     if len(sys.argv) == 1:
         parser.print_help()

@@ -2,7 +2,6 @@ README.md
 pyproject.toml
 src/molsim/__init__.py
 src/molsim/cli.py
-src/molsim/countMoleculesIntoTop.py
 src/molsim/groupLipidsIntoNDX.py
 src/molsim/makeLipidNDX.py
 src/molsim/memSplitNDX.py
@@ -15,16 +14,15 @@ src/molsim.egg-info/top_level.txt
 src/molsim/archive/cyclicpeptides.py
 src/molsim/archive/pdbMerger_unmemoized.py
 src/molsim/commands/__init__.py
+src/molsim/commands/count_mols.py
 src/molsim/commands/frame_times.py
 src/molsim/commands/gen_cpep.py
-src/molsim/commands/makeCyclicPeptide.py
 src/molsim/commands/make_posres.py
 src/molsim/commands/md_check.py
 src/molsim/commands/plot_xvg.py
 src/molsim/commands/top_cyclr.py
 src/molsim/commands/xvg_min.py
-src/molsim/dev/gen_cpep.py
-src/molsim/dev/makeCyclicPeptide.py
+src/molsim/dev/count_mols.py
 src/molsim/operands/topologyCyclicizer.py
 src/molsim/parsers/__init__.py
 src/molsim/parsers/xvgParser.py

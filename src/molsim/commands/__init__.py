@@ -6,6 +6,7 @@ from .plot_xvg import register as register_plot_xvg
 from .frame_times import register as register_frame_times
 from .top_cyclr import register as register_top_cyclr
 from .gen_cpep import register as register_gen_cpep
+from .count_mols import register as register_count_mols
 
 __all__ = [
     'register_xvg_min',
@@ -14,7 +15,8 @@ __all__ = [
     'register_plot_xvg',
     'register_frame_times',
     'register_top_cyclr',
-    'register_gen_cpep'
+    'register_gen_cpep',
+    'register_count_mols'
 ]
 
 
