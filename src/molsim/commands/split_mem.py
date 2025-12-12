@@ -7,14 +7,14 @@ from ..utils.mda import isPhospholipid
 
 
 def register(subparsers):
-    parser = subparsers.add_parser('memSplitNDX',
+    parser = subparsers.add_parser('split_mem',
                                    help='Append or write groups to the .ndx that split the phospholipids based on whether they reside above or below the center of geometry of the membrane along the Z-axis.')
     parser = addArguments(parser)
     parser.set_defaults(func=main)
 
 
 def parseArguments():
-    parser = argparse.ArgumentParser(prog='memSplitNDX.py',
+    parser = argparse.ArgumentParser(prog='split_mem.py',
                                      description='Append or write groups to the .ndx that split the phospholipids based on whether they reside above or below the center of geometry of the membrane along the Z-axis.',
                                      epilog='Written by Lucas Roeleveld')
     parser = addArguments(parser)
@@ -204,7 +204,6 @@ def main(args):
 
     python3 memSplitNDX.py in.tpr in.gro -o index.ndx
     """
-    args = parseArguments()
     running_folder = os.getcwd()
 
     if not os.path.exists(args.filename1):
@@ -286,7 +285,6 @@ def main(args):
     print("\nThey were stored in:")
     print(f"    {args.output}")
 
-main()
 
 if __name__ == '__main__':
     args = parseArguments()

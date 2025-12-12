@@ -29,6 +29,9 @@ def main():
 
     from .commands import register_count_mols
     register_count_mols(subparsers)
+
+    from .commands import register_split_mem
+    register_split_mem(subparsers)
     
     if len(sys.argv) == 1:
         parser.print_help()

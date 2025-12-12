@@ -20,9 +20,10 @@ src/molsim/commands/gen_cpep.py
 src/molsim/commands/make_posres.py
 src/molsim/commands/md_check.py
 src/molsim/commands/plot_xvg.py
+src/molsim/commands/split_mem.py
 src/molsim/commands/top_cyclr.py
 src/molsim/commands/xvg_min.py
-src/molsim/dev/count_mols.py
+src/molsim/dev/makeLipidNDX.py
 src/molsim/operands/topologyCyclicizer.py
 src/molsim/parsers/__init__.py
 src/molsim/parsers/xvgParser.py
@@ -38,7 +39,10 @@ src/molsim/trash/pdbMerger.py
 src/molsim/trash/pdbMerger20-8.py
 src/molsim/trash/pdbMergerOld.py
 src/molsim/trash/plotxvg10-8.py
+src/molsim/trash/split_mem.py
 src/molsim/trash/topologyCyclicizer21-8.py
 src/molsim/trash/topologyCyclicizer22-8.py
 src/molsim/utils/files.py
 src/molsim/utils/maths.py
+src/molsim/utils/mda.py
+src/molsim/utils/mda_G.py
