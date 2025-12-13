@@ -1,10 +1,108 @@
 import numpy as np
-import pandas as pd
-import polars
-import plotly.express as px
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 from pathlib import Path
+import re
+
+
+class NdxParser:
+    """
+    Instantiation:
+        xvg = XvgParser(filenames, path=None)
+    Arguments:
+        filenames: str | Path | [str] | [Path]
+        path: str | Path
+
+
+
+    self.attributes
+    filenames = [filenames]
+    filepaths = [full paths to files]
+    path      = path of directory with files
+    data      = [{group_name: np.ndarray}]
+    """
+    def __init__(self, filenames, path=None):
+        self.data = []
+        # Handle path
+        if isinstance(path, str):
+            self.path = Path(path)
+        elif isinstance(path, Path):
+            self.path = path
+        else:
+            self.path = Path('.')
+        assert self.path.is_dir(), f"The directory `{path}` does not exist."
+        # Prepare filenames
+        if isinstance(filenames, str):
+            self.filenames = [filenames]
+            self.filepaths = [self.path / Path(filenames)]
+        elif isinstance(filenames, list) and len(filenames) > 0 and all(isinstance(f, str) for f in filenames):
+            self.filenames = filenames
+            self.filepaths = [self.path / Path(f) for f in filenames]
+        elif isinstance(filenames, list) and len(filenames) > 0 and all(isinstance(f, Path) for f in filenames):
+            self.filenames = [f.name for f in filenames]
+            self.filepaths = [self.path / f for f in filenames]
+        else:
+            raise ValueError("First argument must be a `str`, `Path`, `[str]` or `[Path]`.")
+        for f in self.filepaths:
+            assert f.suffix == '.ndx', "All files must have the .ndx extension."
+            assert f.is_file(), f"File `{f}` does not exist."
+        # Start reading file
+        self.data = []
+        for f in self.filepaths:
+            self.data.append({})
+            with open(f, 'r') as file:
+                sel_name = ''
+                for line in file:
+                    # matches [ <name> ] in the line
+                    line_re = re.compile(r'^\s*\[\s*([^\]\r\n]+?)\s*\]\s*$')
+                    m = line_re.match(line)
+                    if line.strip() == '':
+                        continue
+                    if m:
+                        sel_name = line.rstrip('\n').strip().lstrip('[').rstrip(']').strip()
+                        self.data[-1][sel_name] = []
+                        continue
+                    if sel_name:
+                        self.data[-1][sel_name].append(map(int, line.rstrip('\n').split()))
+
+    def lines(self, index: int | str):
+        assert self._indexIsRetrievable(index)
+        if isinstance(index, str):
+            index = self._indexOfFilename(index)
+        for key, val in self.data[index].items():
+            yield f'[ {key} ]\n'
+            for row in val:
+                yield ' '.join(str(i) for i in row) + '\n'
+            yield '\n'
+
+    def get_numpy(self, index: int | str):
+        assert self._indexIsRetrievable(index)
+        if isinstance(index, str):
+            return self.data[self._indexOfFilename(index)]
+        else:  # Must be int
+            return self.data[index]
+
+    def _indexOfFilename(self, filename):
+        for i, f in enumerate(self.filenames):
+            if filename == f:
+                return i
+
+    def _indexIsRetrievable(self, index):
+        if isinstance(index, int):
+            assert index in range(len(self))
+        elif isinstance(index, str):
+            assert index in self.filenames
+        else:
+            raise ValueError(f"{index} is not retrievable")
+        return True
+
+    def __len__(self):
+        return len(self.filenames)
+
+    def __getitem__(self, index):
+        return self.get_numpy(index)
+
+    def __iter__(self):
+        for i in range(self.size):
+            yield self.get_numpy(i)
 
 class XvgParser:
     """
@@ -12,7 +110,6 @@ class XvgParser:
         xvg = XvgParser(filenames, path=None)
     Arguments:
         filenames: str | Path | [str] | [Path]
-        path: str | Path
 
 
 
@@ -40,9 +137,6 @@ class XvgParser:
         if isinstance(filenames, str):
             self.filenames = [filenames]
             self.filepaths = [self.path / Path(filenames)]
-        elif isinstance(filenames, Path):
-            self.filenames = [filenames.name]
-            self.filepaths = [self.path / filenames]
         elif isinstance(filenames, list) and len(filenames) > 0 and all(isinstance(f, str) for f in filenames):
             self.filenames = filenames
             self.filepaths = [self.path / Path(f) for f in filenames]
@@ -50,7 +144,7 @@ class XvgParser:
             self.filenames = [f.name for f in filenames]
             self.filepaths = [self.path / f for f in filenames]
         else:
-            raise ValueError("First argument must be a `str`, `Path`, `[str]` or `[Path]`.")
+            raise ValueError("First argument must be a string or a list of strings or list of Paths.")
         for f in self.filepaths:
             assert f.suffix == '.xvg', "All files must have the .xvg extension."
             assert f.is_file(), f"File `{f}` does not exist."
@@ -143,81 +237,6 @@ class XvgParser:
         else:  # Must be int
             return self.data[index]
 
-    def get_pandas(self, index):  # returns as columns of datapoints
-        assert self._indexIsRetrievable(index)
-        if isinstance(index, str):
-            print(self.metadata[self._indexOfFilename(index)]['columns'])
-            return pd.DataFrame(data=self.data[self._indexOfFilename(index)].T,
-                                columns=self.metadata[self._indexOfFilename(index)]['columns'])
-        else:  # Must be int
-            return pd.DataFrame(data=self.data[index],
-                                columns=self.metadata[index]['columns'])
-
-    def get_polars(self, index):
-        assert self._indexIsRetrievable(index)
-        if isinstance(index, str):
-            return polars.DataFrame(data=self.data[self._indexOfFilename(index)].T,
-                                    schema=self.metadata[self._indexOfFilename(index)]['columns'])
-        else:
-            return polars.DataFrame(data=self.data[index],
-                                    schema=self.metadata[index]['columns'])
-
-    def plot(self, all_in_one=False, subplot_titles=None, showlegend=True):
-        """
-        all_in_one:     overlay all data into a single plot
-        subplot_titles: define titles for the plots (default = filenames)
-        """
-        colors = px.colors.qualitative.Alphabet
-        if all_in_one:
-            rows = 1
-            if subplot_titles is not None:
-                subplot_titles = [str(subplot_titles)]
-            else:
-                subplot_titles = ["All together"]
-        else:
-            rows = self.size
-            if subplot_titles is not None:
-                assert len(subplot_titles) == len(self.filenames), f"The argument `subplot_titles` should be of lenght: {self.size}"
-            else:
-                subplot_titles = self.filenames
-        fig = make_subplots(rows=rows,
-                            cols=1,
-                            subplot_titles=subplot_titles)
-        for i, data in enumerate(self.data):  # subplots
-            for j, row in enumerate(data):  # rows
-                if j == 0:
-                    continue
-                if all_in_one:
-                    fig.add_trace(go.Scatter(x=data[0],
-                                             y=row,
-                                             legendgroup=self.filenames[i] + self.metadata[i]['columns'][j],
-                                             name=self.metadata[i]['columns'][j]),
-                                  row=1,
-                                  col=1)
-                else:
-                    use_row = i + 1
-                    trace = go.Scatter(x=data[0],
-                                       y=row,
-                                       line=dict(color=colors[j]),
-                                       legendgroup=self.metadata[i]['columns'][j],
-                                       name=self.metadata[i]['columns'][j])
-                    if i > 0:
-                        trace['showlegend'] = False
-                    fig.add_trace(trace,
-                                  row=use_row,
-                                  col=1)
-            if rows > 1 or all_in_one and i == 0:
-                if 'xaxis' in self.metadata[i]:
-                    fig.update_xaxes(title_text=self.metadata[i]['xaxis'],
-                                     row=i + 1,
-                                     col=1)
-                if 'yaxis' in self.metadata[i]:
-                    fig.update_yaxes(title_text=self.metadata[i]['yaxis'],
-                                     row=i + 1,
-                                     col=1)
-        # Update layout
-        fig.update_layout(height=300 * len(self.filenames), showlegend=showlegend)
-        fig.show()
 
     def __len__(self):
         return self.size

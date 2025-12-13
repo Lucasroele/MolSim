@@ -1,6 +1,7 @@
 import numpy as np
+import MDAnalysis as mda
 from typing import Optional, Tuple
-
+from collections import Counter
 
 def isPhospholipid(atomgroup) -> bool:
     """
@@ -20,6 +21,7 @@ def isPhospholipid(atomgroup) -> bool:
                 [<P_index> <O_index> <O_index> <O_index> <O_index>]
         """
         Ps = atomgroup.select_atoms('element P')
+    
         if not Ps:
             return None
         else:
@@ -145,7 +147,7 @@ def isPhospholipid(atomgroup) -> bool:
 
 
     phos_indices = hasPhosGroup(atomgroup)
-    if phos_indices:
+    if phos_indices is not None:
         also_has_glycerol_attached, ester_carbonyl_Cs = hasGlycerolAttached(atomgroup, phos_indices)
         if also_has_glycerol_attached and ester_carbonyl_Cs:
             return True
