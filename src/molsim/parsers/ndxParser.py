@@ -5,13 +5,13 @@ import re
 
 class NdxParser:
     """
+    Parse multiple ndx files
+
     Instantiation:
         xvg = XvgParser(filenames, path=None)
     Arguments:
         filenames: str | Path | [str] | [Path]
         path: str | Path
-
-
 
     self.attributes
     filenames = [filenames]
@@ -58,6 +58,8 @@ class NdxParser:
                         continue
                     if m:
                         sel_name = line.rstrip('\n').strip().lstrip('[').rstrip(']').strip()
+                        if sel_name in self.data[-1]:
+                            raise ValueError(f"Duplicate group name: `{sel_name}` inside file `{f}`")
                         self.data[-1][sel_name] = []
                         continue
                     if sel_name:
@@ -73,7 +75,7 @@ class NdxParser:
                 yield ' '.join(str(i) for i in row) + '\n'
             yield '\n'
 
-    def get_numpy(self, index: int | str):
+    def _getitem(self, index: int | str):
         assert self._indexIsRetrievable(index)
         if isinstance(index, str):
             return self.data[self._indexOfFilename(index)]
@@ -98,11 +100,11 @@ class NdxParser:
         return len(self.filenames)
 
     def __getitem__(self, index):
-        return self.get_numpy(index)
+        return self._getitem(index)
 
     def __iter__(self):
         for i in range(self.size):
-            yield self.get_numpy(i)
+            yield self._getitem(i)
 
 class XvgParser:
     """

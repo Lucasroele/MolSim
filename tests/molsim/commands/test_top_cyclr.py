@@ -1,7 +1,5 @@
-# test_script.py
 import subprocess
 import filecmp
-#from pathlib import Path
 
 
 def test_script_generates_expected_file(data_dir):

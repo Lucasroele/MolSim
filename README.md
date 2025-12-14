@@ -20,5 +20,6 @@ molsim frame_times src/molsim/operands/dist.xvg -b 3.5 -dr 0.5 -nf 5
 molsim top_cyclr tests/fixtures/top_cyclr/nocyc.top
 molsim gen_cpep AAAAA
 molsim count_mols tests/fixtures/count_mols/mols.gro tests/fixtures/count_mols/before3.top -o topol.top -am "Protein_chain_A 1"
+molsim split_mem src/molsim/operands/pull.tpr
 ```
 

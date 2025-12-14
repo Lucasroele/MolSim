@@ -3,6 +3,7 @@ import MDAnalysis as mda
 from collections import Counter
 from pathlib import Path
 from molsim.utils.mda import isPhospholipid
+from molsim.parsers import NdxParser
 
 
 def register(subparsers):
@@ -22,10 +23,8 @@ def parseArguments():
 
 
 def addArguments(parser):
-    parser.add_argument('filename1',
-                        help='the coordinate file that contains a lipid bilayer.')           # positional argument
-    parser.add_argument('filename2',
-                        help='the .tpr file')
+    parser.add_argument('topfile',
+                        help='the file that defines positions and bonds, e.g. `.tpr`')
     parser.add_argument('-o',
                         '--output',
                         default="index.ndx",
@@ -50,16 +49,13 @@ def addArguments(parser):
 
 
 def validateArguments(args):
-    filepath1 = Path(args.filename1)
-    args.filename1 = str(filepath1)
-    filepath2 = Path(args.filename2)
-    args.filename2 = str(filepath2)
+    filepath = Path(args.topfile)
+    args.topfile = str(filepath)
     outpath = Path(args.output)
     if not outpath.suffix == ".ndx":
         args.output += ".ndx"
         outpath = Path(args.output)
-    assert filepath1.is_file(), "Error: The file `" + filepath1.name + "` does not exist."
-    assert filepath2.is_file(), "Error: The file `" + filepath2.name + "` does not exist."
+    assert filepath.is_file(), "Error: The file `" + filepath.name + "` does not exist."
     if outpath.is_file():
         assert args.force or args.append, "Error: The file `" + outpath.name + "` already exists, set `-f` to overwrite or `-a` to append."
     else:
@@ -82,8 +78,7 @@ def main(args):
     """
     args = validateArguments(args)
     # Create the Universe object
-    #u = mda.Universe(args.filename1, args.filename2)
-    u = mda.Universe(args.filename2)
+    u = mda.Universe(args.topfile)
     residue_counter = Counter()
     residue_counter.update([residue.resname for residue in u.residues])
     resnames = [key for key, value in residue_counter.items()]
@@ -100,7 +95,7 @@ def main(args):
         molecule = u.select_atoms('resid ' + str(resids[resname]))
         if isPhospholipid(molecule):
             phospholipids.append(resname)
-    assert len(phospholipids) > 0, f"No phospholipids in {args.filename2}."
+    assert len(phospholipids) > 0, f"No phospholipids in {args.topfile}."
 
     # Create two groups for every phospholipid
     cog_mem = u.select_atoms('resname ' + ' '.join([resname for resname in phospholipids])).center_of_geometry()
@@ -134,7 +129,26 @@ def main(args):
 
     # Output
     if args.append:
+        del_dict = {}
         writemode = 'a'
+        ndx = NdxParser(args.output)
+        # Check whether the groups aren't already in the file
+        for resname in universe_groups:
+            for z in z_plus_minus:
+                if f"{resname}-{z}" in ndx[0].keys():
+                    if resname not in del_dict.keys():
+                        del_dict[resname] = []
+                    del_dict[resname].append(z)
+        if del_dict.keys() == universe_groups.keys():
+            if all(set(del_dict[resname]) == universe_groups[resname].keys() for resname in del_dict.keys()):
+                if not args.quiet:
+                    print(f"The file `{args.output}` already contains the split groups.")
+                return
+        for resname in del_dict.keys():
+            for z in del_dict[resname]:
+                del universe_groups[resname][z]
+            if not universe_groups[resname]:
+                del universe_groups[resname]
     else:
         writemode = 'w'
     with mda.selections.gromacs.SelectionWriter(args.output, mode=writemode) as ndx:

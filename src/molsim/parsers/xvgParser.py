@@ -8,6 +8,8 @@ from pathlib import Path
 
 class XvgParser:
     """
+    Parse multiple .xvg files
+    
     Instantiation:
         xvg = XvgParser(filenames, path=None)
     Arguments:

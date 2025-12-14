@@ -4,7 +4,6 @@ src/molsim/__init__.py
 src/molsim/cli.py
 src/molsim/groupLipidsIntoNDX.py
 src/molsim/makeLipidNDX.py
-src/molsim/memSplitNDX.py
 src/molsim/pdbMerger.py
 src/molsim.egg-info/PKG-INFO
 src/molsim.egg-info/SOURCES.txt
@@ -26,6 +25,7 @@ src/molsim/commands/xvg_min.py
 src/molsim/dev/makeLipidNDX.py
 src/molsim/operands/topologyCyclicizer.py
 src/molsim/parsers/__init__.py
+src/molsim/parsers/ndxParser.py
 src/molsim/parsers/xvgParser.py
 src/molsim/testing/pdbmerger_test/pdbMerger20-8.py
 src/molsim/testing/pdbmerger_test/pdbOld.py
@@ -35,6 +35,7 @@ src/molsim/trash/countMoleculesIntoTop6-11.py
 src/molsim/trash/makeLipidNDX24-8.py
 src/molsim/trash/makeLipidNDX9-8.py
 src/molsim/trash/makePept.py
+src/molsim/trash/memSplitNDX.py
 src/molsim/trash/pdbMerger.py
 src/molsim/trash/pdbMerger20-8.py
 src/molsim/trash/pdbMergerOld.py
