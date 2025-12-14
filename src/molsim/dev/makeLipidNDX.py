@@ -31,6 +31,8 @@ import MDAnalysis as mda
 import numpy
 from collections import Counter
 import argparse
+from molsim.utils.mda import isPhospholipid
+from molsim.parsers import NdxParser
 
 # FUNCTIONS
 # used to return the atomindex an atomindex is bound to given a bond between the two
@@ -261,7 +263,7 @@ def parseSegment(current_index, molmd, grouped_indices):
 args = parseArguments()
 
 # Create the Universe object
-u = mda.Universe(args.filename2, args.filename1)
+u = mda.Universe(args.filename2)
 
 # Count number of each residue present
 residue_counter = Counter()
