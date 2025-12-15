@@ -164,3 +164,26 @@ def isPhospholipid(atomgroup) -> bool:
             return True
     return False
 
+
+def leafletResolution(atomgroup, ref_atomgroup=None, z_midpoint=None) -> list:
+    """
+    Takes a single atomgroup and returns two atomgroups in a list.
+    The first is the upper leaflet, the second is the lower leaflet.
+    """
+    # Create two groups for every residue in the atomgroup
+    if ref_atomgroup is None:
+        ref_atomgroup = atomgroup
+    if z_midpoint is None:
+        z_midpoint = ref_atomgroup.center_of_geometry()[2]
+    leaflet_p_ndx = []
+    leaflet_n_ndx = []
+
+    for residue in atomgroup.residues:
+        if ref_atomgroup.select_atoms('resid ' + str(residue.resid)).center_of_geometry()[2] > z_midpoint:
+            leaflet_p_ndx.extend(atomgroup.select_atoms('resid ' + str(residue.resid)).indices)
+        else:
+            leaflet_n_ndx.extend(atomgroup.select_atoms('resid ' + str(residue.resid)).indices)
+    leaflet_p = atomgroup.select_atoms('index ' + ' '.join([str(num) for num in leaflet_p_ndx]))
+    leaflet_n = atomgroup.select_atoms('index ' + ' '.join([str(num) for num in leaflet_n_ndx]))
+    assert len(leaflet_p) + len(leaflet_n) == len(atomgroup), "Leaflet resolution failed."
+    return [leaflet_p, leaflet_n]

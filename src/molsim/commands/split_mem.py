@@ -68,6 +68,7 @@ def main(args):
     """
     This script creates gmx workable groups and stores them in an ndx file.
     The groups are created based on whether or not they are phospholipids and reside above or below the center of geometry of all phospholipids.
+    Assumes the bilayers extends along the xy-plane.
 
     INPUT
         .tpr and .gro
