@@ -7,14 +7,14 @@ from pathlib import Path
 
 def test_script_generates_expected_file(data_dir):
     # Paths
-    input_file = data_dir / "split_mem/pull.tpr"
-    expected_file = data_dir/ "split_mem/sjab.ndx" # temporary file for script output
+    input_file = data_dir / "ndxs/pull.tpr"
+    expected_file = data_dir/ "ndxs/sjab.ndx" # temporary file for script output
 
     tempfile_name = "temp.ndx"
     with tempfile.TemporaryDirectory() as tmpdir:
         tmp = Path(tmpdir) / tempfile_name
         for i in range(1,2):
-            output_file = data_dir / f"split_mem/index{i}.ndx" 
+            output_file = data_dir / f"ndxs/index{i}.ndx" 
 
             shutil.copy2(output_file, tmp)
 

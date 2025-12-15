@@ -1,4 +1,27 @@
 # from utils/mda.py
+def isGlycerolCarbon(carbontype, atom):
+    """
+    atom = mda.Atom (the potential glycerol carbon)
+    carbontype = 2:
+        atom should be terminal glycerol carbon
+    carbontype = 3:
+        atom should be interstitial glycerol carbon
+    """
+    CandO = Counter()
+    for bond in atom.bonds:
+        CandO.update([bond.partner(atom).element])
+    if not ("C" in CandO and "O" in CandO):
+        return False
+    if carbontype == 2:
+        if CandO["C"] == 1 and CandO["O"] == 1:
+            return True
+        else:
+            return False
+    elif carbontype == 3:
+        if CandO["C"] == 2 and CandO["O"] == 1:
+            return True
+        else:
+            return False
 def hasPhosGroup(atomgroup) -> np.ndarray | None:
     """
     Returns:

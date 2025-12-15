@@ -36,7 +36,7 @@ def addArguments(parser):
     parser.add_argument('-a',
                         '--append',
                         action="store_true",
-                        help='creates a new .ndx and overwrites any .ndx present')
+                        help='set to append the groups to the ndx file.')
     parser.add_argument('-f',
                         '--force',
                         action='store_true',
@@ -50,7 +50,7 @@ def addArguments(parser):
 
 def validateArguments(args):
     filepath = Path(args.topfile)
-    args.topfile = str(filepath)
+    #args.topfile = str(filepath) prob just bs
     outpath = Path(args.output)
     if not outpath.suffix == ".ndx":
         args.output += ".ndx"

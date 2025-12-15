@@ -38,8 +38,15 @@ from molsim.utils.mda import hasPhosGroup
 from molsim.utils.mda import hasGlycerolAttached
 
 # FUNCTIONS
+def register(subparsers):
+    parser = subparsers.add_parser('lipid_ndx',
+                                   help='Add lipid groups to existing .ndx or create new .ndx containing only lipid groups')
+    parser = addArguments(parser)
+    parser.set_defaults(func=main)
+
+        
 def parseArguments():
-    parser = argparse.ArgumentParser(prog='makeLipidNDX.py',
+    parser = argparse.ArgumentParser(prog='lipid_ndx.py',
                                      description='Add lipid groups to existing .ndx or create new .ndx containing only lipid groups',
                                      epilog='Written by Lucas Roeleveld')
     parser = addArguments(parser)
@@ -58,22 +65,18 @@ def addArguments(parser):
                         '--uneven',
                         action='store_true',
                         help='enable this flag when leaflet phospholipid distribution is not identical.')
-    parser.add_argument('-ll',
-                        '--leaflet',
-                        action='store_true',
-                        help='Create all groups also for each leaflet')
     parser.add_argument('-a',
                         '--append',
                         action="store_true",
                         help='set to append the groups to the ndx file.')
+    parser.add_argument('-ll',
+                        '--leaflet',
+                        action='store_true',
+                        help='Create all groups also for each leaflet')
     parser.add_argument('-q',
                         '--quiet',
                         action='store_true',
                         help='disable logging')
-    parser.add_argument('-f',
-                        '--force',
-                        action='store_true',
-                        help='force overwrite of existing ndx file')
     return parser
 
 
@@ -82,14 +85,10 @@ def validateArguments(args):
         args.output += ".ndx"
     outpath = Path(args.output)
     toppath = Path(args.topfile)
-    if not toppath.is_file():
-        raise FileNotFoundError(f"Error: The file `{args.topfile}` does not exist.")
-    if args.append and not outpath.is_file():
-        raise FileNotFoundError(f"Error: The file `{args.output}` does not exist, and you tried to append it.")
-    if outpath.is_file() and not args.append and not args.force:
-        raise FileExistsError(f"Error: The file `{args.output}` already exists, and you tried to overwrite it.")
+    assert toppath.is_file(), f"Error: The file `{args.topfile}` does not exist."
+    if args.append:
+        assert outpath.is_file(), f"Error: The file `{args.output}` does not exist."
     return args
-
 
 def makeGroupFromIndices(molmd, indices):
     str_indices = ' '.join([str(num) for num in indices])

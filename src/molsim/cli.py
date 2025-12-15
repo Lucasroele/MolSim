@@ -32,7 +32,10 @@ def main():
 
     from .commands import register_split_mem
     register_split_mem(subparsers)
-    
+
+    from .commands import register_lipid_ndx
+    register_lipid_ndx(subparsers)
+
     if len(sys.argv) == 1:
         parser.print_help()
         sys.exit(0)

@@ -10,6 +10,8 @@ from collections import Counter
 
 def hasPhosGroup(atomgroup) -> np.ndarray | None:
     """
+    Returns the indices of the FIRST phosphate P and its oxygens when successful
+
     Returns:
         None -> atomgroup does not contain a phosphate
         list -> atomgroup contains a phosphate (list contains indices of the phosphate and its oxygens)
