@@ -62,7 +62,7 @@ def addArguments(parser):
                         '--output',
                         default='index.ndx',
                         help='the ndx file that will see the lipid groups added.')
-    parser.add_argument('-uneven',
+    parser.add_argument('-u',
                         '--uneven',
                         action='store_true',
                         help='enable this flag when leaflet phospholipid distribution is not identical.')
@@ -74,6 +74,10 @@ def addArguments(parser):
                         '--leaflet',
                         action='store_true',
                         help='Create all groups also for each leaflet')
+    parser.add_argument('-nos',
+                        '--no_subgroups',
+                        action='store_true',
+                        help='disable subgroups, i.e. phosphate, glycerol and glycerolester')
     parser.add_argument('-q',
                         '--quiet',
                         action='store_true',
@@ -223,7 +227,7 @@ def main(args):
                 print(f"    {phospholipid}")
 
     # Parse each one instance of each phospholipid
-    groupnames = ["phosphate", "glycerolester", "middle_chain", "outer_chain", "headgroup"]
+    groupnames = ["", "phosphate", "glycerolester", "middle_chain", "outer_chain", "headgroup"]
     molmd = {} # {"<resname>": <atomGroup>}
     resname_groups = {} # {"resname": {"groupname": <atomGroup>}}
     grouped_indices = {} # {"resname": {"groupname": [#]}}
@@ -237,38 +241,41 @@ def main(args):
         u.delete_bonds(bonds_to_be_deleted)
         molmd[resname] = u.select_atoms('resid ' + str(resids[resname]) + " and not element H")
         # phosphate
-        resname_groups[resname][groupnames[0]] = makeGroupFromIndices(molmd[resname], has_phos[resname])
-        grouped_indices[resname][groupnames[0]] = has_phos[resname]
+        resname_groups[resname][groupnames[1]] = makeGroupFromIndices(molmd[resname], has_phos[resname])
+        grouped_indices[resname][groupnames[1]] = has_phos[resname]
         # glycerolester
-        resname_groups[resname][groupnames[1]] = makeGroupFromIndices(molmd[resname], also_has_glycerol_attached[resname])
-        grouped_indices[resname][groupnames[1]] = also_has_glycerol_attached[resname]
+        resname_groups[resname][groupnames[2]] = makeGroupFromIndices(molmd[resname], also_has_glycerol_attached[resname])
+        grouped_indices[resname][groupnames[2]] = also_has_glycerol_attached[resname]
         # middle_chain
-        grouped_indices[resname][groupnames[2]] = parseSegment(ester_carbonyl_Cs[resname][0], molmd[resname], list(it.chain.from_iterable(grouped_indices[resname].values())))
-        resname_groups[resname][groupnames[2]] = makeGroupFromIndices(molmd[resname], grouped_indices[resname][groupnames[2]])
-        # outer_chain
-        grouped_indices[resname][groupnames[3]] = parseSegment(ester_carbonyl_Cs[resname][1], molmd[resname], list(it.chain.from_iterable(grouped_indices[resname].values())))
+        grouped_indices[resname][groupnames[3]] = parseSegment(ester_carbonyl_Cs[resname][0], molmd[resname], list(it.chain.from_iterable(grouped_indices[resname].values())))
         resname_groups[resname][groupnames[3]] = makeGroupFromIndices(molmd[resname], grouped_indices[resname][groupnames[3]])
+        # outer_chain
+        grouped_indices[resname][groupnames[4]] = parseSegment(ester_carbonyl_Cs[resname][1], molmd[resname], list(it.chain.from_iterable(grouped_indices[resname].values())))
+        resname_groups[resname][groupnames[4]] = makeGroupFromIndices(molmd[resname], grouped_indices[resname][groupnames[4]])
         # headgroup
-        for atom in resname_groups[resname][groupnames[0]]:
+        for atom in resname_groups[resname][groupnames[1]]:
             if atom.element == "P":
                 continue
             elif len(atom.bonds) == 1:
                 continue
             else:
                 for bond in atom.bonds:
-                    if bond.partner(atom) not in resname_groups[resname][groupnames[0]] and bond.partner(atom) not in resname_groups[resname][groupnames[1]]:
-                        grouped_indices[resname][groupnames[4]] = parseSegment(atom.index, molmd[resname],list(it.chain.from_iterable(grouped_indices[resname].values())))
-                        resname_groups[resname][groupnames[4]] = makeGroupFromIndices(molmd[resname], grouped_indices[resname][groupnames[4]])
+                    if bond.partner(atom) not in resname_groups[resname][groupnames[1]] and bond.partner(atom) not in resname_groups[resname][groupnames[2]]:
+                        grouped_indices[resname][groupnames[5]] = parseSegment(atom.index, molmd[resname],list(it.chain.from_iterable(grouped_indices[resname].values())))
+                        resname_groups[resname][groupnames[5]] = makeGroupFromIndices(molmd[resname], grouped_indices[resname][groupnames[5]])
                         break
+        # phoslip
+        resname_groups[resname][groupnames[0]] = molmd[resname]
+        grouped_indices[resname][groupnames[0]] = list(molmd[resname].indices)
 
         # Sanity checks
         all_grouped_indices[resname] = []
         for key in grouped_indices[resname]:
             all_grouped_indices[resname].extend(grouped_indices[resname][key])
         errmes = f"Something went wrong in grouping the non-H atoms of {resname}."
-        assert len(all_grouped_indices[resname]) == len(molmd[resname].indices), errmes + ' ' + str(len(all_grouped_indices[resname])) + ' vs ' + str(len(molmd[resname].indices))
+        assert len(all_grouped_indices[resname]) == 2 * len(molmd[resname].indices), errmes + ' ' + str(len(all_grouped_indices[resname])) + ' vs ' + str(len(molmd[resname].indices))
         assert len(set(molmd[resname].indices) - set(all_grouped_indices[resname])) == 0, errmes
-        assert len(all_grouped_indices[resname]) == len(set(all_grouped_indices[resname])), errmes
+        assert len(all_grouped_indices[resname]) == 2 * len(set(all_grouped_indices[resname])), errmes
 
         # Group all atoms inside the universe not just the template residue atoms
         universe_group_indices[resname] = {}
@@ -278,45 +285,88 @@ def main(args):
             for groupname, group in resname_groups[resname].items():
                 if atom.resname == resname and atom.name in group.names:
                     universe_group_indices[resname][groupname].append(atom.index)
-                    break
         universe_groups[resname] = {}
         for groupname in resname_groups[resname].keys():
             universe_groups[resname][groupname] = makeGroupFromIndices(u, universe_group_indices[resname][groupname])
         for groupname in universe_group_indices[resname]:
             assert len(universe_group_indices[resname][groupname])/residue_counter[resname] == len(grouped_indices[resname][groupname]), errmes
 
-    special = ['lipid', 'leaflet_p', 'leaflet_n']
     universe_groups['lipid'] = makeGroupFromIndices(u, [c for a in universe_group_indices.values() for b in a.values() for c in b])
-    if args.leaflet:
-        leaflet_p, leaflet_n = leafletResolution(universe_groups['lipid'])
-        universe_groups['leaflet_p'] = leaflet_p
-        universe_groups['leaflet_n'] = leaflet_n
+    
+    if args.no_subgroups:
+        for resname in phospholipids:
+            for groupname in groupnames[1:]:
+                del universe_groups[resname][groupname]
 
+    def nameMaker(nested_group_dict):
+        """
+        Recursive function that formats the nested groups
+
+        Parameters
+        ----------
+        nested_group_dict :
+            e.g. {"POPC": {"phophate": atomgroup1, "glycerol": atomgroup2, ...}, ...}
+
+        Returns
+        -------
+        names :
+            e.g. ["POPC_phosphate", "POPC_glycerol", ...]
+        atoms :
+            e.g. [atomgroup1, atomgroup2, ...]
+        """
+        names = []
+        atoms = []
+        for key1, val1 in nested_group_dict.items():
+            if isinstance(val1, dict):
+                temp_names, temp_atoms = nameMaker(val1)
+                for key2, val2 in zip(temp_names, temp_atoms):
+                    if key2 == "":
+                        names.append(key1)
+                    else:
+                        names.append(f"{key1}_{key2}")
+                    atoms.append(val2)
+            else:
+                names.append(key1)
+                atoms.append(val1)
+        return names, atoms
+
+    names, atoms = nameMaker(universe_groups)
+    if args.leaflet:
+        new_names = []
+        new_atoms = []
+        for i in range(len(names)):
+            leaflet_p, leaflet_n = leafletResolution(atoms[i])
+            new_names.append(f"{names[i]}_Z+")
+            new_names.append(f"{names[i]}_Z-")
+            if len(leaflet_p) != len(leaflet_n) and not args.uneven:
+                raise ValueError(f"Leaflet resolution failed for {names[i]}, set `--uneven` to ignore this error.")
+            new_atoms.append(leaflet_p)
+            new_atoms.append(leaflet_n)
+        names = new_names
+        atoms = new_atoms
+
+    
+    # Add the checking part for already present from split_mem
 
     # Output
     if args.append:
         write_mode = 'a'
+        # Make sure the file ends with a empty line before appending
+        with open(args.output, 'r+') as ndx:
+            if ndx.readlines()[-1] != '\n':
+                ndx.write("\n")
     else:
         write_mode = 'w'
     with mda.selections.gromacs.SelectionWriter(args.output, mode=write_mode) as ndx:
-        for resname in universe_groups:
-            if resname in special:
-                ndx.write(universe_groups[resname], name=f"{resname}")
-                ndx._outfile.write("\n")
-            else:
-                for groupname, group in universe_groups[resname].items():
-                    ndx.write(group, name=f"{resname}_{groupname}")
-                    ndx._outfile.write("\n")
+        for i, name in enumerate(names):
+            ndx.write(atoms[i], name=name)
+            ndx._outfile.write("\n")
 
     # Log
     if not args.quiet:
         print("\nCreated the following atom groups:")
-        for resname in universe_groups:
-            if resname in special:
-                print(f"    {resname}")
-            else:
-                for groupname in universe_groups[resname]:
-                    print(f"    {resname}_{groupname}")
+        for name in names:
+            print(f"    {name}")
         print("\nThey were stored in:")
         print(f"    {args.output}")
 
