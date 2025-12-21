@@ -14,7 +14,8 @@ from numba import njit
 from time import perf_counter
 import time
 from functools import lru_cache
-
+import warnings
+import contextlib
 
 def getVirtBox(u):
     virtualbox = []
@@ -360,6 +361,10 @@ def addArguments(parser):
                         type=str,
                         default='    ',
                         help="used to set the segment ID in column 73-76 of the .pdb output file.")
+    parser.add_argument("-q",
+                        "--quiet",
+                        action="store_true",
+                        help="suppress warnings")
     return parser
 
 
@@ -473,8 +478,8 @@ args = parseArguments()
 
 xyz = ['x', 'y', 'z']
 
-u_main = mda.Universe(args.filename1)
-u2 = mda.Universe(args.filename2)
+u_main = mda.Universe(args.filename1) # the membrane
+u2 = mda.Universe(args.filename2) # the molecule
 
 
 for segment in u_main.segments:
@@ -508,7 +513,7 @@ if args.takeMe is not None:
         chainToMove = chainids[0]
 else:
     chainToMove = chainids[0]
-u2_chain = mda.Merge(u2.select_atoms(f"chainID {chainToMove}"))
+u2_chain = mda.Merge(u2.select_atoms(f"chainID {chainToMove}")) # create new universe
 if chainToMove in u_main_ids:
     if args.newChainID not in u_main_ids:
         for atom in u2_chain.atoms:
@@ -683,8 +688,13 @@ if args.allpos:
 transform = boxdimensions.set_dimensions(newbox + [90, 90, 90])
 u_new.trajectory.add_transformations(transform)
 # Write output
-with mda.Writer(args.output) as outfile:
-    outfile.write(u_new)
+
+context = warnings.catch_warnings() if args.quiet else contextlib.nullcontext()
+with context:
+    if args.quiet:
+        warnings.filterwarnings("ignore", category=UserWarning, module=r"MDAnalysis\.coordinates\.PDB")
+    with mda.Writer(args.output) as outfile:
+        outfile.write(u_new)
 
 if args.distance is not None or args.distance_between is not None:
     print(f"\nThe molecule in {args.filename2} was moved along the {xyz[ddist]}-axis.")
