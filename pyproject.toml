@@ -2,6 +2,13 @@
 name = "molsim"
 version = "0.1.0"
 requires-python = ">=3.13"
+dependencies = [
+    "polars",
+    "plotly",
+    "biopython",
+    "PeptideBuilder",
+    "numba",
+]
 
 [project.scripts]
 molsim = "molsim.cli:main"

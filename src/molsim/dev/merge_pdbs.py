@@ -245,15 +245,15 @@ def FindLstsqPlane(cloud=None, order=None, show_output=False, axis=0, test=False
     return fit, order
 
 
-#def register(subparsers):
-#    parser = subparsers.add_parser('pdbMerger',
-#                                   help='Provide two .pdb files to this function to merge these into single .pdb or .gro or other supported formats.')
-#    parser = addArguments(parser)
-#    parser.set_defaults(func=main)
+def register(subparsers):
+    parser = subparsers.add_parser('merge_pdbs',
+                                   help='Provide two .pdb files to this function to merge these into single .pdb or .gro or other supported formats.')
+    parser = addArguments(parser)
+    parser.set_defaults(func=main)
 
 
 def parseArguments():
-    parser = argparse.ArgumentParser(prog='pdbMerger.py',
+    parser = argparse.ArgumentParser(prog='merge_pdbs.py',
                                      description='Provide two .pdb files to this function to merge these into single .pdb or .gro or other supported formats.',
                                      epilog='')
     parser = addArguments(parser)
@@ -266,7 +266,9 @@ def validateArguments(args):
         args.segid = args.segid.ljust(4)
     else:
         args.segid = args.segid[:4]
-    
+    if args.distance_between is not None and args.distance_between < 1.7:
+        raise ValueError("The distance between should be at least 1.7 or else the molecule might just thread through the membrane.")
+    return args 
 
 
 def addArguments(parser):
@@ -274,7 +276,7 @@ def addArguments(parser):
     parser.add_argument('filename2')           # positional argument
     parser.add_argument("-o",
                         "--output",
-                        default="merged.pdb",
+                        default="together.pdb",
                         type=str,
                         nargs='?',
                         help='name of the output which defaults to `output.pdb`')
@@ -348,7 +350,7 @@ def addArguments(parser):
                         '--angle',
                         type=int,
                         help='only does something if -prd/--thisResIDDown is also spcified. Obliques the plane passing throught the chain by the number of degrees specified.')
-    parser.add_argument('-dbetween',
+    parser.add_argument('-db',
                         '--distance_between',
                         type=float,
                         help='minimum distance between minimum z value of the chain and maximum of the membrane, can be overridden by -distance.')
@@ -452,6 +454,7 @@ def distanceBetweenZoffset(cloud1, cloud2, target_dist=None):
             if point[2] > minmax[cloud1name]['max'][2] - 10:
                 useful_cloud1.append(point)
     useful_cloud1 = np.array(useful_cloud1)
+    print(useful_cloud1.shape)
     if target_dist is not None:
         distance_moved = 0
         return_cloud2 = np.array(cloud2)
@@ -459,7 +462,12 @@ def distanceBetweenZoffset(cloud1, cloud2, target_dist=None):
             return_cloud2[:,2] += target_dist - maxdist
             distance_moved += target_dist - maxdist
         mindist = distanceFromSquares(squaresOfCloudsXYZ(useful_cloud1, return_cloud2))
+        print(min_stepsize)
         while mindist - target_dist > dis_tol and step < step_tol:
+            print(f"{mindist = }")
+            print(mindist - target_dist)
+            print(f"{float(distance_moved) = }")
+            print('---')
             move = max([min_stepsize, mindist - target_dist])
             return_cloud2[:,2] -= move
             distance_moved     -= move
@@ -474,235 +482,236 @@ def distanceBetweenZoffset(cloud1, cloud2, target_dist=None):
         return return_cloud2, mindist
 
 
-args = parseArguments()
+def main(args):
+    args = validateArguments(args)
+    xyz = ['x', 'y', 'z']
 
-xyz = ['x', 'y', 'z']
-
-u_main = mda.Universe(args.filename1) # the membrane
-u2 = mda.Universe(args.filename2) # the molecule
-
-
-for segment in u_main.segments:
-    segment.segid = args.segid
-
-virtualbox = getVirtBox(u_main)
+    u_main = mda.Universe(args.filename1) # the membrane
+    u2 = mda.Universe(args.filename2) # the molecule
 
 
-# Only add box dimensions when specified and big enough
-if args.box is not None:
-    if args.box[0] and args.box[1] and args.box[2]:
-        try:
-            if float(args.box[0]) >= virtualbox[0] and float(args.box[1]) >= virtualbox[1] and float(args.box[2]) >= virtualbox[2]:
-                transform = boxdimensions.set_dimensions(args.box + [90, 90, 90])
-                u_main.trajectory.add_transformations(transform)
-            else:
-                raise
-        except ValueError:
-            sys.exit("The specified boxdimensions are not big enought to encapsulate the system")
+    for segment in u_main.segments:
+        segment.segid = args.segid
+
+    virtualbox = getVirtBox(u_main)
 
 
-# Make sure the molecule in the new pdb has a different chainID
-u_main_ids = getChainIDs(u_main)
-chainids = getChainIDs(u2)
-chainToMove = str
-if args.takeMe is not None:
-    if args.takeMe in chainids:
-        chainToMove = args.takeMe
-    else:
-        print(f"The file contained no molecules with chainID {args.takeMe} so atoms in chain {chainids[0]} were taken.")
-        chainToMove = chainids[0]
-else:
-    chainToMove = chainids[0]
-u2_chain = mda.Merge(u2.select_atoms(f"chainID {chainToMove}")) # create new universe
-if chainToMove in u_main_ids:
-    if args.newChainID not in u_main_ids:
-        for atom in u2_chain.atoms:
-            atom.chainID = args.newChainID
-    else:
-        sys.exit(f"specify a correct chainID to assign to the molecule in {args.filename2}.")
+    # Only add box dimensions when specified and big enough
+    if args.box is not None:
+        if args.box[0] and args.box[1] and args.box[2]:
+            try:
+                if float(args.box[0]) >= virtualbox[0] and float(args.box[1]) >= virtualbox[1] and float(args.box[2]) >= virtualbox[2]:
+                    transform = boxdimensions.set_dimensions(args.box + [90, 90, 90])
+                    u_main.trajectory.add_transformations(transform)
+                else:
+                    raise
+            except ValueError:
+                sys.exit("The specified boxdimensions are not big enought to encapsulate the system")
 
 
-# Add chain ids
-if args.addChainIDs:  # Writer assigns if unspecified
-    if not hasattr(u_main.atoms, 'chainIDs'):
-        u_main.add_TopologyAttr('chainIDs')
-    abc = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-    distinct_residues_without_chainid = []
-    for residue in u_main.residues:
-        chainid = ""
-        for atom in u_main.select_atoms("resname " + str(residue.resname)):
-            if hasattr(atom, "chainID") and atom.chainID is not None and atom.chainID != " " and atom.chainID != "":
-                chainid = atom.chainID
-                break
-        if chainid != "":
-            for atom in u_main.select_atoms("resname " + str(residue.resname)):
-                atom.chainID = chainid
+    # Make sure the molecule in the new pdb has a different chainID
+    u_main_ids = getChainIDs(u_main)
+    chainids = getChainIDs(u2)
+    chainToMove = str
+    if args.takeMe is not None:
+        if args.takeMe in chainids:
+            chainToMove = args.takeMe
         else:
-            if residue.resname not in distinct_residues_without_chainid:
-                distinct_residues_without_chainid.append(residue.resname)
-    i = 0
-    for nochainid in distinct_residues_without_chainid:
-        while i < len(abc) and abc[i] in u_main_ids or abc[i] in chainids:
-            i += 1
-        if i == len(abc):
-            sys.exit(f"Tried to assign more chainIDs than available in the `{abc}`")
-        for atom in u_main.select_atoms("resname " + nochainid):
-            atom.chainID = abc[i]
-        i += 1
-
-
-# Move molecule along axes relative to center of mass of u_main
-com_main = u_main.atoms.center_of_geometry()
-com2 = u2_chain.atoms.center_of_geometry()
-if args.concentric:
-    for d in range(0, 3):
-        u2_chain.coord.positions[:, d] += (com_main[d] - com2[d])
-        com2[d] = com_main[d]
-if args.x is not None:
-    offset = (args.x - com2[0] + com_main[0])  # basically new x
-    u2_chain.coord.positions[:, 0] += offset
-    com2[0] += offset
-if args.y is not None:
-    offset = (args.y - com2[1] + com_main[1])  # basically new y
-    u2_chain.coord.positions[:, 1] += offset
-    com2[1] += offset
-if args.z is not None:
-    offset = (args.z - com2[2] + com_main[2])  # basically new z
-    u2_chain.coord.positions[:, 2] += offset
-    com2[2] += offset
-
-
-# rotate the molecule in space
-ddist = 2
-if args.thisResIDDown is not None:
-    if args.thisResIDDown not in u2_chain.residues.resids:
-        sys.exit(f"residue number {args.thisResIDDown} is not present in chain {chainToMove} in {args.filename2}.")
-    res_group = u2_chain.select_atoms(f"resid {args.thisResIDDown}")
-    cog_res = res_group.center_of_geometry()
-    u2_chain.coord.positions -= com2
-    res_group = u2_chain.select_atoms(f"resid {args.thisResIDDown}")
-    cog_res = res_group.center_of_geometry()
-    down_vec = np.zeros(3)
-    down_vec[ddist] = -1
-    angle = angleBetween(down_vec, cog_res)
-    # create matrix that rotates residue towards down_vec
-    if angle != 0:
-        axis = np.cross(cog_res, down_vec)
-        rot_mat = rotationMatrix(axis, angle)
-        u2_chain.coord.positions = np.matmul(u2_chain.coord.positions, rot_mat)
-    if args.angle is not None:
-        if args.angle != 0:
-            vecs_res_cogs = np.empty((len(u2_chain.residues), 3))  # use for cyclic peptide plane finding
-            for i, residue in enumerate(u2_chain.residues):
-                vecs_res_cogs[i] = u2_chain.select_atoms(f"resid {residue.resid}").center_of_geometry()
-            # fit[0] * cloud[order[0]] + fit[1] * cloud[order[1]] + fit[2] ~= cloud[order[2]]
-            fit, order = FindLstsqPlane(vecs_res_cogs, axis=2)  # Plane does not necessarily go through the origin
-            vecs_in_plane = np.zeros((2, 3))  # use for normal_to_plane finding
-            for i in range(2):
-                vecs_in_plane[i][i] = 1
-                vecs_in_plane[i][2] = fit[0] * vecs_in_plane[i][0] + fit[1] * vecs_in_plane[i][1]
-            backorder = np.array(range(3))
-            for i, d in enumerate(order):
-                backorder[d] = i
-            # order indexes assignment of xyz into fit
-            # backorder indexes assignment of fit into xyz
-            normal_to_plane = np.cross(vecs_in_plane[0], vecs_in_plane[1])
-            normal_to_plane = np.array([normal_to_plane[backorder[0]], normal_to_plane[backorder[1]], normal_to_plane[backorder[2]]])
-            rot_axis = np.cross(normal_to_plane, down_vec)
-            res_group = u2_chain.select_atoms(f"resid {args.thisResIDDown}")
-            cog_res = res_group.center_of_geometry()
-            u2_chain.coord.positions -= cog_res
-            ### Added because using the plane is better than just using the vector from chain cog to res cog (which will stay at the origin)
-            angle = angleBetween(normal_to_plane, cog_res)
-            rot_mat = rotationMatrix(rot_axis, angle - math.pi / 2)
-            u2_chain.coord.positions = np.matmul(u2_chain.coord.positions, rot_mat)
-            ###
-            rot_mat = rotationMatrix(rot_axis, args.angle / 180 * math.pi)
-            u2_chain.coord.positions = np.matmul(u2_chain.coord.positions, rot_mat)
-            u2_chain.coord.positions += cog_res
-    u2_chain.coord.positions += com2
-
-
-# Move chain along the z-axis
-distance = 0
-moveIt = False
-if args.distance_between is not None:
-    start_time = time.time()
-    u2_chain.coord.positions, distance = distanceBetweenZoffset(u_main.coord.positions, u2_chain.coord.positions, target_dist=args.distance_between)
-    end_time = time.time()
-    print(f"time taken to move the molecule: {end_time - start_time}")
-elif args.distance is not None:
-    u2_chain.coord.positions[:, ddist] += distance
-
-
-# Create a new universe
-u_new = mda.Merge(u2_chain.atoms, u_main.atoms)
-virtualbox = getVirtBox(u_new)
-newbox = []
-read_box_dims = False  # Set to true when succesfully read box_dims from the input files
-if args.box is not None and args.box[0] and args.box[1] and args.box[2]:
-    if float(args.box[0]) >= virtualbox[0] and float(args.box[1]) >= virtualbox[1] and float(args.box[2]) >= virtualbox[2]:
-        newbox = round(args.box, 3)
+            print(f"The file contained no molecules with chainID {args.takeMe} so atoms in chain {chainids[0]} were taken.")
+            chainToMove = chainids[0]
     else:
-        sys.exit(f"Adding the molecule inside {args.filename2} caused the sepecified boxdimensions to not be big enough.")
-# Only make makeshift box when set
-elif args.makeBox:
-    u_new.coord.positions[:, 2] -= min(u_new.coord.positions[:, 2])
-    newbox = getVirtBox(u_new)
-else:
-    try:
-        newbox = list(u_main.dimensions[0:3])
-        read_box_dims = True
-        # Check not all just set to 1
-        num_set_to_one = 0
-        for i in range(3):
-            if newbox[i] - 1 < 1e-6:
-                num_set_to_one += 1
-        if num_set_to_one == 3:
-            raise ValueError
-    except (TypeError, ValueError):
-        newbox = virtualbox
+        chainToMove = chainids[0]
+    u2_chain = mda.Merge(u2.select_atoms(f"chainID {chainToMove}")) # create new universe
+    if chainToMove in u_main_ids:
+        if args.newChainID not in u_main_ids:
+            for atom in u2_chain.atoms:
+                atom.chainID = args.newChainID
+        else:
+            sys.exit(f"specify a correct chainID to assign to the molecule in {args.filename2}.")
 
 
-# modify the box?
-if args.zinc is not None:
-    newbox[2] += round(args.zinc, 3)
-    if not args.zincMono:
-        u_new.coord.positions[:, 2] += round(args.zinc / 2, 3)
-
-# center in box
-if args.center:
-    com_new = [round(num, 3) for num in u_new.atoms.center_of_mass()]
-    for d in range(0, 3):
-        u_new.coord.positions[:, d] += (newbox[d] / 2 - com_new[d])
-
-
-# make all coord positive
-if args.allpos:
-    for d in range(0, 3):
-        mind = min(u_new.coord.positions[:, d])
-        if mind < 0:
-            u_new.coord.positions[:, d] -= mind
-
-# Output
-transform = boxdimensions.set_dimensions(newbox + [90, 90, 90])
-u_new.trajectory.add_transformations(transform)
-# Write output
-
-context = warnings.catch_warnings() if args.quiet else contextlib.nullcontext()
-with context:
-    if args.quiet:
-        warnings.filterwarnings("ignore", category=UserWarning, module=r"MDAnalysis\.coordinates\.PDB")
-    with mda.Writer(args.output) as outfile:
-        outfile.write(u_new)
-
-if args.distance is not None or args.distance_between is not None:
-    print(f"\nThe molecule in {args.filename2} was moved along the {xyz[ddist]}-axis.")
-
-print(f"\nThe new system was stored in `{args.output}`.\n")
+    # Add chain ids
+    if args.addChainIDs:  # Writer assigns if unspecified
+        if not hasattr(u_main.atoms, 'chainIDs'):
+            u_main.add_TopologyAttr('chainIDs')
+        abc = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+        distinct_residues_without_chainid = []
+        for residue in u_main.residues:
+            chainid = ""
+            for atom in u_main.select_atoms("resname " + str(residue.resname)):
+                if hasattr(atom, "chainID") and atom.chainID is not None and atom.chainID != " " and atom.chainID != "":
+                    chainid = atom.chainID
+                    break
+            if chainid != "":
+                for atom in u_main.select_atoms("resname " + str(residue.resname)):
+                    atom.chainID = chainid
+            else:
+                if residue.resname not in distinct_residues_without_chainid:
+                    distinct_residues_without_chainid.append(residue.resname)
+        i = 0
+        for nochainid in distinct_residues_without_chainid:
+            while i < len(abc) and abc[i] in u_main_ids or abc[i] in chainids:
+                i += 1
+            if i == len(abc):
+                sys.exit(f"Tried to assign more chainIDs than available in the `{abc}`")
+            for atom in u_main.select_atoms("resname " + nochainid):
+                atom.chainID = abc[i]
+            i += 1
 
 
+    # Move molecule along axes relative to center of mass of u_main
+    com_main = u_main.atoms.center_of_geometry()
+    com2 = u2_chain.atoms.center_of_geometry()
+    if args.concentric:
+        for d in range(0, 3):
+            u2_chain.coord.positions[:, d] += (com_main[d] - com2[d])
+            com2[d] = com_main[d]
+    if args.x is not None:
+        offset = (args.x - com2[0] + com_main[0])  # basically new x
+        u2_chain.coord.positions[:, 0] += offset
+        com2[0] += offset
+    if args.y is not None:
+        offset = (args.y - com2[1] + com_main[1])  # basically new y
+        u2_chain.coord.positions[:, 1] += offset
+        com2[1] += offset
+    if args.z is not None:
+        offset = (args.z - com2[2] + com_main[2])  # basically new z
+        u2_chain.coord.positions[:, 2] += offset
+        com2[2] += offset
 
+
+    # rotate the molecule in space
+    ddist = 2
+    if args.thisResIDDown is not None:
+        if args.thisResIDDown not in u2_chain.residues.resids:
+            sys.exit(f"residue number {args.thisResIDDown} is not present in chain {chainToMove} in {args.filename2}.")
+        res_group = u2_chain.select_atoms(f"resid {args.thisResIDDown}")
+        cog_res = res_group.center_of_geometry()
+        u2_chain.coord.positions -= com2
+        res_group = u2_chain.select_atoms(f"resid {args.thisResIDDown}")
+        cog_res = res_group.center_of_geometry()
+        down_vec = np.zeros(3)
+        down_vec[ddist] = -1
+        angle = angleBetween(down_vec, cog_res)
+        # create matrix that rotates residue towards down_vec
+        if angle != 0:
+            axis = np.cross(cog_res, down_vec)
+            rot_mat = rotationMatrix(axis, angle)
+            u2_chain.coord.positions = np.matmul(u2_chain.coord.positions, rot_mat)
+        if args.angle is not None:
+            if args.angle != 0:
+                vecs_res_cogs = np.empty((len(u2_chain.residues), 3))  # use for cyclic peptide plane finding
+                for i, residue in enumerate(u2_chain.residues):
+                    vecs_res_cogs[i] = u2_chain.select_atoms(f"resid {residue.resid}").center_of_geometry()
+                # fit[0] * cloud[order[0]] + fit[1] * cloud[order[1]] + fit[2] ~= cloud[order[2]]
+                fit, order = FindLstsqPlane(vecs_res_cogs, axis=2)  # Plane does not necessarily go through the origin
+                vecs_in_plane = np.zeros((2, 3))  # use for normal_to_plane finding
+                for i in range(2):
+                    vecs_in_plane[i][i] = 1
+                    vecs_in_plane[i][2] = fit[0] * vecs_in_plane[i][0] + fit[1] * vecs_in_plane[i][1]
+                backorder = np.array(range(3))
+                for i, d in enumerate(order):
+                    backorder[d] = i
+                # order indexes assignment of xyz into fit
+                # backorder indexes assignment of fit into xyz
+                normal_to_plane = np.cross(vecs_in_plane[0], vecs_in_plane[1])
+                normal_to_plane = np.array([normal_to_plane[backorder[0]], normal_to_plane[backorder[1]], normal_to_plane[backorder[2]]])
+                rot_axis = np.cross(normal_to_plane, down_vec)
+                res_group = u2_chain.select_atoms(f"resid {args.thisResIDDown}")
+                cog_res = res_group.center_of_geometry()
+                u2_chain.coord.positions -= cog_res
+                ### Added because using the plane is better than just using the vector from chain cog to res cog (which will stay at the origin)
+                angle = angleBetween(normal_to_plane, cog_res)
+                rot_mat = rotationMatrix(rot_axis, angle - math.pi / 2)
+                u2_chain.coord.positions = np.matmul(u2_chain.coord.positions, rot_mat)
+                ###
+                rot_mat = rotationMatrix(rot_axis, args.angle / 180 * math.pi)
+                u2_chain.coord.positions = np.matmul(u2_chain.coord.positions, rot_mat)
+                u2_chain.coord.positions += cog_res
+        u2_chain.coord.positions += com2
+
+
+    # Move chain along the z-axis
+    distance = 0
+    moveIt = False
+    if args.distance_between is not None:
+        start_time = time.time()
+        u2_chain.coord.positions, distance = distanceBetweenZoffset(u_main.coord.positions, u2_chain.coord.positions, target_dist=args.distance_between)
+        end_time = time.time()
+        print(f"time taken to move the molecule: {end_time - start_time}")
+    elif args.distance is not None:
+        u2_chain.coord.positions[:, ddist] += distance
+
+
+    # Create a new universe
+    u_new = mda.Merge(u2_chain.atoms, u_main.atoms)
+    virtualbox = getVirtBox(u_new)
+    newbox = []
+    read_box_dims = False  # Set to true when succesfully read box_dims from the input files
+    if args.box is not None and args.box[0] and args.box[1] and args.box[2]:
+        if float(args.box[0]) >= virtualbox[0] and float(args.box[1]) >= virtualbox[1] and float(args.box[2]) >= virtualbox[2]:
+            newbox = round(args.box, 3)
+        else:
+            sys.exit(f"Adding the molecule inside {args.filename2} caused the sepecified boxdimensions to not be big enough.")
+    # Only make makeshift box when set
+    elif args.makeBox:
+        u_new.coord.positions[:, 2] -= min(u_new.coord.positions[:, 2])
+        newbox = getVirtBox(u_new)
+    else:
+        try:
+            newbox = list(u_main.dimensions[0:3])
+            read_box_dims = True
+            # Check not all just set to 1
+            num_set_to_one = 0
+            for i in range(3):
+                if newbox[i] - 1 < 1e-6:
+                    num_set_to_one += 1
+            if num_set_to_one == 3:
+                raise ValueError
+        except (TypeError, ValueError):
+            newbox = virtualbox
+
+
+    # modify the box?
+    if args.zinc is not None:
+        newbox[2] += round(args.zinc, 3)
+        if not args.zincMono:
+            u_new.coord.positions[:, 2] += round(args.zinc / 2, 3)
+
+    # center in box
+    if args.center:
+        com_new = [round(num, 3) for num in u_new.atoms.center_of_mass()]
+        for d in range(0, 3):
+            u_new.coord.positions[:, d] += (newbox[d] / 2 - com_new[d])
+
+
+    # make all coord positive
+    if args.allpos:
+        for d in range(0, 3):
+            mind = min(u_new.coord.positions[:, d])
+            if mind < 0:
+                u_new.coord.positions[:, d] -= mind
+
+    # Output
+    transform = boxdimensions.set_dimensions(newbox + [90, 90, 90])
+    u_new.trajectory.add_transformations(transform)
+    # Write output
+
+    context = warnings.catch_warnings() if args.quiet else contextlib.nullcontext()
+    with context:
+        if args.quiet:
+            warnings.filterwarnings("ignore", category=UserWarning, module=r"MDAnalysis\.coordinates\.PDB")
+        with mda.Writer(args.output) as outfile:
+            outfile.write(u_new)
+
+    if args.distance is not None or args.distance_between is not None:
+        print(f"\nThe molecule in {args.filename2} was moved along the {xyz[ddist]}-axis.")
+    
+    print(f"\nThe new system was stored in `{args.output}`.\n")
+
+if __name__ == "__main__":
+    args = parseArguments()
+    main(args)
 
 
 

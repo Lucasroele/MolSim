@@ -36,6 +36,9 @@ def main():
     from .commands import register_lipid_ndx
     register_lipid_ndx(subparsers)
 
+    from .dev.merge_pdbs import register
+    register(subparsers)
+
     if len(sys.argv) == 1:
         parser.print_help()
         sys.exit(0)
