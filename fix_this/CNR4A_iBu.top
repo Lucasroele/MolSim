@@ -1,0 +1,33 @@
+#include "/home/lucasr/resources/forcefields/charmm36-feb2026_ljpme_cgenff-5.0.ff/forcefield.itp"
+
+; additional params for the molecule
+#include "cnribu.prm"
+
+#include "cnribu.itp"
+
+#include "/home/lucasr/resources/forcefields/charmm36-feb2026_ljpme_cgenff-5.0.ff/tip3p.itp"
+#ifdef POSRES_WATER
+; Position restraint for each water oxygen
+[ position_restraints ]
+;  i funct		 fcx		fcy		   fcz
+   1	1		1000	   1000		  1000
+#endif
+
+; Include topology for ions
+#include "/home/lucasr/resources/forcefields/charmm36-feb2026_ljpme_cgenff-5.0.ff/ions.itp"
+
+[ system ]
+; Name
+mol
+
+[ molecules ]
+; Compound		  #mols
+CNRIBU			1
+
+; ---- position restraints for CNR4A_iBu ----
+#ifdef POSRES_STRONG
+#include "posre_CNR4A_iBu_strong.itp"
+#endif
+#ifdef POSRES_WEAK
+#include "posre_CNR4A_iBu_weak.itp"
+#endif
