@@ -50,7 +50,7 @@ def validateArguments(args):
             args.filenames = getFileNames(".xvg", path=args.dir)
         assert len(args.filenames) > 0, "Error: " + "No .xvg files found in " + (args.dir if args.dir is not None else running_folder) + "."
     elif isinstance(args.filenames, str):
-        assert os.path.exists(args.filename1), "Error: The file `" + args.filenames + "` does not exist."
+        assert os.path.exists(args.filenames), "Error: The file `" + args.filenames + "` does not exist."
     elif isinstance(args.filenames, list):
         for filename in args.filenames:
             assert os.path.exists(filename), "Error: The file `" + filename + "` does not exist."
