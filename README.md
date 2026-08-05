@@ -5,6 +5,7 @@ scripts for use preparing molecular simulations
 To install MolSim, clone the repository and navigate to the project directory:
 
 Then, install using:
+(don't forget the dot ⟶ .)
 
 ```bash
 pip install -e .
