@@ -69,7 +69,7 @@ def addArguments(parser):
     parser.add_argument('-a',
                         '--append',
                         action="store_true",
-                        help='set to append the groups to the ndx file.')
+                        help='set to append the groups to the ndx file, does not check whether the groups are already present.')
     parser.add_argument('-ll',
                         '--leaflet',
                         action='store_true',

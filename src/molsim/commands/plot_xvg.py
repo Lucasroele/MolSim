@@ -42,7 +42,6 @@ def validateArguments(args):
     if args.dir is not None and args.filenames is not []:
         print("Note: The --dir argument is ignored when filenames are supplied.")
     if args.filenames == []:
-        print(args.filenames)
         if args.dir is None:
             args.filenames = getFileNames(".xvg")
         else:
