@@ -1,0 +1,6 @@
+MDAnalysis
+polars
+plotly
+biopython
+PeptideBuilder
+numba

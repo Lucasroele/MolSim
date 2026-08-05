@@ -27,8 +27,7 @@ def parseArguments():
 
 def addArguments(parser):
     parser.add_argument('filenames',
-                        nargs='?',
-                        default=None,
+                        nargs='*',
                         help='the .xvg file(s).')           # positional argument
     parser.add_argument('-d',
                         '--dir',
@@ -40,18 +39,17 @@ def addArguments(parser):
 
 def validateArguments(args):
     running_folder = os.getcwd()
-    if args.dir is not None and args.filenames is not None:
+    if args.dir is not None and args.filenames is not []:
         print("Note: The --dir argument is ignored when filenames are supplied.")
-    if args.filenames is None:
+    if args.filenames == []:
+        print(args.filenames)
         if args.dir is None:
             args.filenames = getFileNames(".xvg")
         else:
             assert Path(args.dir).is_dir(), "Error: The directory `" + args.dir + "` does not exist."
             args.filenames = getFileNames(".xvg", path=args.dir)
         assert len(args.filenames) > 0, "Error: " + "No .xvg files found in " + (args.dir if args.dir is not None else running_folder) + "."
-    elif isinstance(args.filenames, str):
-        assert os.path.exists(args.filenames), "Error: The file `" + args.filenames + "` does not exist."
-    elif isinstance(args.filenames, list):
+    else:
         for filename in args.filenames:
             assert os.path.exists(filename), "Error: The file `" + filename + "` does not exist."
     return args
