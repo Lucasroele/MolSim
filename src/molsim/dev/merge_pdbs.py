@@ -272,8 +272,10 @@ def validateArguments(args):
 
 
 def addArguments(parser):
-    parser.add_argument('filename1')           # positional argument
-    parser.add_argument('filename2')           # positional argument
+    parser.add_argument('filename1',
+                        help='the pdb file of the membrane')           # positional argument
+    parser.add_argument('filename2',
+                        help='the pdb file of the molecule')           # positional argument
     parser.add_argument("-o",
                         "--output",
                         default="together.pdb",
@@ -454,7 +456,6 @@ def distanceBetweenZoffset(cloud1, cloud2, target_dist=None):
             if point[2] > minmax[cloud1name]['max'][2] - 10:
                 useful_cloud1.append(point)
     useful_cloud1 = np.array(useful_cloud1)
-    print(useful_cloud1.shape)
     if target_dist is not None:
         distance_moved = 0
         return_cloud2 = np.array(cloud2)
@@ -462,7 +463,6 @@ def distanceBetweenZoffset(cloud1, cloud2, target_dist=None):
             return_cloud2[:,2] += target_dist - maxdist
             distance_moved += target_dist - maxdist
         mindist = distanceFromSquares(squaresOfCloudsXYZ(useful_cloud1, return_cloud2))
-        print(min_stepsize)
         while mindist - target_dist > dis_tol and step < step_tol:
             print(f"{mindist = }")
             print(mindist - target_dist)
@@ -473,7 +473,6 @@ def distanceBetweenZoffset(cloud1, cloud2, target_dist=None):
             distance_moved     -= move
             mindist = distanceFromSquares(squaresOfCloudsXYZ(useful_cloud1, return_cloud2))
             step += 1
-        print(step)
         if step == step_tol:
             print("The function distanceBetweenZoffset did not converge.", file=sys.stderr)
         return return_cloud2, distance_moved
@@ -521,6 +520,12 @@ def main(args):
             chainToMove = chainids[0]
     else:
         chainToMove = chainids[0]
+        if len(chainids) == 1 and chainToMove == "":
+            for atom in u2.atoms:
+                atom.chainID = "A"
+            chainToMove = chainids[0] = "A"
+        else:
+            sys.exit("Specify a chainID to move from the file.")
     u2_chain = mda.Merge(u2.select_atoms(f"chainID {chainToMove}")) # create new universe
     if chainToMove in u_main_ids:
         if args.newChainID not in u_main_ids:
