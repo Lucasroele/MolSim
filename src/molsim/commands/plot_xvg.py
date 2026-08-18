@@ -119,7 +119,7 @@ def validateArguments(args):
 def makeFig(filenames, dataset):
     # Create 2d list with plot titles
     cols = max([len(dataset[filename]) - 1 for filename in filenames])
-    subplot_titles = [[filename if i < len(dataset[filename]) - 1 else "" for i in range(cols)] for filename in filenames]
+    subplot_titles = [[filename if j > len(dataset[filename]) else dataset.metadata[i]['columns'][j+1] for j in range(cols)] for i, filename in enumerate(filenames)]
     fig = make_subplots(rows=len(filenames), cols=cols, subplot_titles = list(itertools.chain(*subplot_titles)))
     # Add subplots
     for i, filename in enumerate(filenames):
