@@ -110,7 +110,15 @@ class XvgParser:
                         for cel in infoline:
                             tempdata.append([])
                         if len(self.metadata[i]['columns']) != len(tempdata):
-                            if len(self.metadata[i]['comments']) > 0 and \
+                            if self.metadata[i].get('xaxis') != None and \
+                            self.metadata[i].get('yaxis') != None:
+                                self.metadata[i]['columns'] = [
+                                    self.metadata[i]['xaxis'],
+                                    self.metadata[i]['yaxis']]
+                                if len(self.metadata[i]['columns']) < len(tempdata):
+                                    self.metadata[i]['columns'].extend(
+                                        ['Extra ' + str(leg) for leg in range(1, 1 + len(tempdata) - len(self.metadata[i]['columns']))])
+                            elif len(self.metadata[i]['comments']) > 0 and \
                             prev_line == self.metadata[i]['comments'][-1] and \
                             prev_line.split() == len(tempdata):
                                 self.metadata[i]['columns'] = [
@@ -120,11 +128,17 @@ class XvgParser:
                             else:
                                 self.metadata[i]['columns'] = [
                                     str(leg) for leg, _ in enumerate(tempdata)]
+                        if not self.metadata[i].get('xaxis'):
+                            self.metadata[i]['xaxis'] = self.metadata[i]['columns'][0]                   # Read data
                     for k, cel in enumerate(infoline):
                         tempdata[k].append(float(cel))
                     prev_line = line
                 self.data.append(np.array(tempdata))
+
+
+                assert len(self.metadata[i]['columns']) == len(tempdata), f"{len(self.metadata[i]['columns'])} != {len(tempdata)}"
         self.size = len(self.data)
+        
 
     def info(self):
         for i, filename in enumerate(self.filenames):
@@ -148,7 +162,6 @@ class XvgParser:
     def get_pandas(self, index):  # returns as columns of datapoints
         assert self._indexIsRetrievable(index)
         if isinstance(index, str):
-            print(self.metadata[self._indexOfFilename(index)]['columns'])
             return pd.DataFrame(data=self.data[self._indexOfFilename(index)].T,
                                 columns=self.metadata[self._indexOfFilename(index)]['columns'])
         else:  # Must be int
