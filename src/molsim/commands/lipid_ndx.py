@@ -38,6 +38,10 @@ from molsim.utils.mda import hasPhosGroup
 from molsim.utils.mda import hasGlycerolAttached
 from molsim.utils.mda import leafletResolution
 
+class ArgumentValidationError(Exception):
+    """Raised when CLI arguments fail validation."""
+    pass
+
 # FUNCTIONS
 def register(subparsers):
     parser = subparsers.add_parser('lipid_ndx',
@@ -78,6 +82,10 @@ def addArguments(parser):
                         '--no_subgroups',
                         action='store_true',
                         help='disable subgroups, i.e. phosphate, glycerol and glycerolester')
+    parser.add_argument('-f',
+                        '--force',
+                        action='store_true',
+                        help='force overwrite of output file')
     parser.add_argument('-q',
                         '--quiet',
                         action='store_true',
@@ -90,10 +98,14 @@ def validateArguments(args):
         args.output += ".ndx"
     outpath = Path(args.output)
     toppath = Path(args.topfile)
-    assert toppath.is_file(), f"Error: The file `{args.topfile}` does not exist."
-    if args.append:
-        assert outpath.is_file(), f"Error: The file `{args.output}` does not exist."
+    if not toppath.is_file():
+        raise ArgumentValidationError(f"The file `{args.topfile}` does not exist.")
+    if args.append and not outpath.is_file():
+        raise ArgumentValidationError(f"The file `{args.output}` does not exist.")
+    if outpath.is_file() and not args.force:
+        raise ArgumentValidationError(f"The file `{args.output}` already exists and `-f` was not used.")
     return args
+
 
 def makeGroupFromIndices(molmd, indices):
     str_indices = ' '.join([str(num) for num in indices])
