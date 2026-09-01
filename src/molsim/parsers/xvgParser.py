@@ -110,7 +110,12 @@ class XvgParser:
                         for cel in infoline:
                             tempdata.append([])
                         if len(self.metadata[i]['columns']) != len(tempdata):
-                            if self.metadata[i].get('xaxis') != None and \
+                            if len(self.metadata[i]['columns']) + 1 == len(tempdata):
+                                if self.metadata[i].get('xaxis') != None:
+                                    self.metadata[i]['columns'].insert(0, self.metadata[i]['xaxis'])
+                                else:
+                                    self.metadata[i]['columns'].insert(0, '#')
+                            elif self.metadata[i].get('xaxis') != None and \
                             self.metadata[i].get('yaxis') != None:
                                 self.metadata[i]['columns'] = [
                                     self.metadata[i]['xaxis'],

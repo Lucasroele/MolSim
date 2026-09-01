@@ -7,6 +7,7 @@ def test_plot_xvg(data_dir):
     data_1 = [data_dir / "xvgs/dist_1.xvg"]
     data_2 = [data_dir / "xvgs/dist_2.xvg", data_dir / "xvgs/dist_3.xvg"]
     data = [data_1, data_2]
+    data_more = [data_dir / "xvgs/dens_headgroups_all.xvg"]
     # Run your script as a subprocess
     # Replace 'python' and 'script.py' with the correct command if needed
     for datum in data:
@@ -16,6 +17,10 @@ def test_plot_xvg(data_dir):
         )
     subprocess.run(
             ["python3", "src/molsim/commands/plot_xvg.py", '--dir', str(data_dir / "xvgs")],
+        check=True
+    )
+    subprocess.run(
+            ["python3", "src/molsim/commands/plot_xvg.py"] + data_more,
         check=True
     )
 
