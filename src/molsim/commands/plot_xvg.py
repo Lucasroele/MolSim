@@ -53,68 +53,6 @@ def validateArguments(args):
             assert os.path.exists(filename), "Error: The file `" + filename + "` does not exist."
     return args
 
-#def getDataFromXmgrFiles(_filenames):
-#    """
-#    Assumes that strings are double quote enclosed
-#    Returns
-#    dict with
-#        <filename> np.arrays with columns in xmgrace stored as rows
-#        <cols> max#ofcols
-#        <y_axis_labels> nested list
-#    """
-#    if isinstance(_filenames, str):
-#        filenames = [_filenames]
-#    else:
-#        filenames = _filenames
-#    # Initialize lists to store the data
-#    data = {filenames[i]:[] for i in range(len(filenames))}
-#    y_axis_labels = {}
-#    cols = 0  # Number of columns used for plotting
-#    # Read data from each file
-#    for i, filename in enumerate(filenames):
-#        y_axis_labels[filename] = []
-#        with open(filename, 'r') as file:
-#            j = 0
-#            for line in file:
-#                if line.startswith('#'):
-#                    continue
-#                if line.strip() == '':
-#                    continue
-#                if line.startswith('@'):  # parse in column names
-#                    infoline = line.split()
-#                    if len(infoline) >= 4 and infoline[2] == "legend" and infoline[1][0] == "s" \
-#                    or len(infoline) >= 5 and infoline[1] == "legend" and infoline[2] == "string":
-#                        if infoline[-1].endswith('"') and not infoline[-1].startswith('"'):
-#                            label = infoline[-1]
-#                            for substr in infoline[-2:0:-1]:
-#                                label = substr + " " + label
-#                                if substr.startswith('"'):
-#                                    break
-#                        else:
-#                            label = infoline[-1]
-#                        label = label.strip('"')
-#                        y_axis_labels[filename].append(label)
-#                    continue
-#                infoline = line.split()
-#                data[filename].append([])
-#                for k, col in enumerate(infoline):
-#                    data[filename][j].append(float(col))
-#                if k > cols:
-#                    cols = k
-#                j += 1
-#
-#    # When no legend in the xvg present
-#    for i, filename in enumerate(filenames):
-#        if len(y_axis_labels[filename]) != len(data[filename][0]) - 1:
-#            y_axis_labels[filename] = list(range(len(data[filename])+1)[1::])
-#
-#    # Create the subplot figure
-#    data = {filenames[i]:np.array(data[filenames[i]]).T for i in range(len(data))}
-#    data["cols"] = cols
-#    data["y_axis_labels"] = y_axis_labels
-#    return data
-
-
 
 def makeFig(filenames, dataset):
     # Create 2d list with plot titles

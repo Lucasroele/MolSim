@@ -32,20 +32,28 @@ def parseArguments():
 def addArguments(parser):
     parser.add_argument('coordfile',
                         help='the coordinate file')
+    parser.add_argument('-f',
+                        '--force',
+                        action='store_true',
+                        help='skip input validation')
     return parser
 
 
 def validateArguments(args):
-    SUPPORTED_FILE_EXTENSIONS = [".gro", ".pdb"]
-    check = False
-    for ext in SUPPORTED_FILE_EXTENSIONS:
-        if args.coordfile.endswith(ext):
-            directory, filename = os.path.split(args.coordfile)
-            check = True
-            assert filename in getFileNames(ext, directory), f"Could not find {args.coordfile}"
-            break
-    assert check, f"`{ext}` files are not supported"
-    return args
+    if args.force:
+        return args
+    else:
+        SUPPORTED_FILE_EXTENSIONS = [".gro", ".pdb"]
+        check = False
+        for ext in SUPPORTED_FILE_EXTENSIONS:
+            if args.coordfile.endswith(ext):
+                directory, filename = os.path.split(args.coordfile)
+                check = True
+                assert filename in getFileNames(ext, directory), f"Could not find {args.coordfile}"
+                break
+        if not check:
+            print(f"Supported file extensions: {SUPPORTED_FILE_EXTENSIONS}")
+        return args
 
 
 def main(args):
