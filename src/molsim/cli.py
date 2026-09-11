@@ -30,6 +30,9 @@ def main():
     from .commands import register_count_mols
     register_count_mols(subparsers)
 
+    from .commands import register_scale_coords
+    register_scale_coords(subparsers)
+
 #    from .commands import register_split_mem
 #    register_split_mem(subparsers)
 
