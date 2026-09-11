@@ -7,6 +7,7 @@ from .frame_times import register as register_frame_times
 from .top_cyclr import register as register_top_cyclr
 from .gen_cpep import register as register_gen_cpep
 from .count_mols import register as register_count_mols
+from .scale_coords import register as register_scale_coords
 from .lipid_ndx import register as register_lipid_ndx
 
 __all__ = [
@@ -18,6 +19,7 @@ __all__ = [
     'register_top_cyclr',
     'register_gen_cpep',
     'register_count_mols',
+    'register_scale_coords',
     'register_lipid_ndx'
 ]
 

@@ -111,6 +111,8 @@ def main(args):
             for ion in ions_present:
                 conc = float(mol_counter[ion])/Nav/(float(mol_counter[solvent_pres])/Nav/conc_water)
                 print("\t%-4s %6.4f" % (ion, conc))
+        else:
+            print("Couldn't figure out which is the solvent")
     else:
         print(f"There are no recognised ions inside `{args.coordfile}`.")
 
