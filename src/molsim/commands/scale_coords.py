@@ -91,13 +91,14 @@ def _validate_box_geometry(ref_u, target_u):
 
 def _scale_by_molecule_com(universe, scale, center):
     positions = universe.atoms.positions.copy()
-    for residue in universe.residues:
+    for i, residue in enumerate(universe.residues):
         atom_indices = residue.atoms.indices
         if len(atom_indices) == 0:
             continue
         mol_com = residue.atoms.center_of_mass()
         relative = universe.atoms.positions[atom_indices] - mol_com
-        scaled_com = (mol_com - center) * scale + center
+        #scaled_com = (mol_com - center) * scale + center
+        scaled_com = mol_com * scale
         positions[atom_indices] = relative + scaled_com
 
     if len(universe.residues) == 0:
