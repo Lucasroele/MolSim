@@ -3,3 +3,6 @@
 #operands/
 trash/
 archive/
+__pycache__/
+*.egg-info/
+*.pyc

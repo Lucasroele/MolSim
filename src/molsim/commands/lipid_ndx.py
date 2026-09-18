@@ -37,10 +37,7 @@ from molsim.utils.mda import hasPhosGroup
 #from molsim.utils.mda import isGlycerolCarbon
 from molsim.utils.mda import hasGlycerolAttached
 from molsim.utils.mda import leafletResolution
-
-class ArgumentValidationError(Exception):
-    """Raised when CLI arguments fail validation."""
-    pass
+from molsim.utils.errors import *
 
 # FUNCTIONS
 def register(subparsers):
@@ -49,7 +46,7 @@ def register(subparsers):
     parser = addArguments(parser)
     parser.set_defaults(func=main)
 
-        
+
 def parseArguments():
     parser = argparse.ArgumentParser(prog='lipid_ndx.py',
                                      description='Add lipid groups to existing .ndx or create new .ndx containing only lipid groups',
@@ -96,13 +93,15 @@ def addArguments(parser):
 def validateArguments(args):
     if not args.output.endswith(".ndx"):
         args.output += ".ndx"
+    if args.topfile.endswith(".gro"):
+        raise ArgumentValidationError(f"The file `{args.topfile}` is a `.gro` that does not contain topology.")
     outpath = Path(args.output)
     toppath = Path(args.topfile)
     if not toppath.is_file():
         raise ArgumentValidationError(f"The file `{args.topfile}` does not exist.")
     if args.append and not outpath.is_file():
         raise ArgumentValidationError(f"The file `{args.output}` does not exist.")
-    if outpath.is_file() and not args.force:
+    if not args.append and outpath.is_file() and not args.force:
         raise ArgumentValidationError(f"The file `{args.output}` already exists and `-f` was not used.")
     return args
 
@@ -128,7 +127,7 @@ def findBondsToHydrogensInRes(atomgroup):
 def parseSegment(current_index, atomgroup, grouped_indices: list):
     """
     traverse through molecule and assign atoms to groups
-    
+
 
     Parameters
     ----------

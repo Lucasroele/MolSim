@@ -3,9 +3,8 @@ import MDAnalysis as mda
 from typing import Optional, Tuple
 from collections import Counter
 
-#  Dependencies
-#      - split_mem
-#      - makeLipidNDX.py
+#  Dependents
+#      - lipid_ndx.py
 
 
 def hasPhosGroup(atomgroup) -> np.ndarray | None:
