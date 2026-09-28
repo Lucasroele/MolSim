@@ -6,3 +6,4 @@ archive/
 __pycache__/
 *.egg-info/
 *.pyc
+/fix

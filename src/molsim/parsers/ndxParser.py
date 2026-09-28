@@ -62,7 +62,7 @@ class NdxParser:
                         self.data[-1][sel_name] = []
                         continue
                     if sel_name:
-                        self.data[-1][sel_name].extend(list(map(int, line.rstrip('\n').split())))                                                                                   
+                        self.data[-1][sel_name].extend(list(map(int, line.rstrip('\n').split())))
                 for group in self.data[-1].keys():
                     self.data[-1][group] = np.array(self.data[-1][group])
 
@@ -104,7 +104,7 @@ class NdxParser:
         return self._getitem(index)
 
     def __iter__(self):
-        for i in range(self.size):
+        for i in range(len(self)):
             yield self._getitem(i)
 
 class XvgParser:
