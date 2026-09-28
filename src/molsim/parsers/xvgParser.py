@@ -197,9 +197,10 @@ class XvgParser:
         else:
             rows = self.size
             if subplot_titles is not None:
-                assert len(subplot_titles) == len(self.filenames), f"The argument `subplot_titles` should be of lenght: {self.size}"
+                if len(subplot_titles) != len(self.size):
+                    raise ValueError(f"The argument `subplot_titles` should be of lenght: {self.size}")
             else:
-                subplot_titles = self.filenames
+                subplot_titles = [Path(f).stem for f in self.filenames]
         fig = make_subplots(rows=rows,
                             cols=1,
                             subplot_titles=subplot_titles)

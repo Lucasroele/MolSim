@@ -350,7 +350,7 @@ def main(args):
             new_names.append(f"{names[i]}_Z+")
             new_names.append(f"{names[i]}_Z-")
             if len(leaflet_p) != len(leaflet_n) and not args.uneven:
-                raise ValueError(f"Leaflet resolution failed for {names[i]}, set `--uneven` to ignore this error.")
+                raise ValueError(f"Leaflet resolution failed for {names[i]}. This might be due to membrane deformation. Set `--uneven` to ignore this error.")
             new_atoms.append(leaflet_p)
             new_atoms.append(leaflet_n)
         names = new_names

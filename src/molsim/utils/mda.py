@@ -178,10 +178,11 @@ def leafletResolution(atomgroup, ref_atomgroup=None, z_midpoint=None) -> list:
     leaflet_n_ndx = []
 
     for residue in atomgroup.residues:
-        if ref_atomgroup.select_atoms('resid ' + str(residue.resid)).center_of_geometry()[2] > z_midpoint:
-            leaflet_p_ndx.extend(atomgroup.select_atoms('resid ' + str(residue.resid)).indices)
+        atoms = atomgroup.select_atoms('resid ' + str(residue.resid))
+        if atoms.center_of_geometry()[2] > z_midpoint:
+            leaflet_p_ndx.extend(atoms.indices)
         else:
-            leaflet_n_ndx.extend(atomgroup.select_atoms('resid ' + str(residue.resid)).indices)
+            leaflet_n_ndx.extend(atoms.indices)
     leaflet_p = atomgroup.select_atoms('index ' + ' '.join([str(num) for num in leaflet_p_ndx]))
     leaflet_n = atomgroup.select_atoms('index ' + ' '.join([str(num) for num in leaflet_n_ndx]))
     assert len(leaflet_p) + len(leaflet_n) == len(atomgroup), "Leaflet resolution failed."

@@ -2,7 +2,6 @@ import numpy as np
 from pathlib import Path
 import re
 
-
 class NdxParser:
     """
     Parse multiple ndx files
@@ -63,7 +62,9 @@ class NdxParser:
                         self.data[-1][sel_name] = []
                         continue
                     if sel_name:
-                        self.data[-1][sel_name].append(map(int, line.rstrip('\n').split()))
+                        self.data[-1][sel_name].extend(list(map(int, line.rstrip('\n').split())))                                                                                   
+                for group in self.data[-1].keys():
+                    self.data[-1][group] = np.array(self.data[-1][group])
 
     def lines(self, index: int | str):
         assert self._indexIsRetrievable(index)
@@ -233,7 +234,7 @@ class XvgParser:
 
 
     def get_numpy(self, index):  # returns as rows of datapoints
-        assert self._indexIsRetrievable(index)
+        self._indexIsRetrievable(index)
         if isinstance(index, str):
             return self.data[self._indexOfFilename(index)]
         else:  # Must be int
@@ -247,7 +248,7 @@ class XvgParser:
         return self.get_numpy(index)
 
     def __iter__(self):
-        for i in range(self.size):
+        for i in range(len(self)):
             yield self.get_numpy(i)
 
     def _findString(self, list_of_strings):
@@ -278,9 +279,11 @@ class XvgParser:
 
     def _indexIsRetrievable(self, index):
         if isinstance(index, int):
-            assert index in range(self.size)
+            if index not in range(len(self)):
+                raise ValueError(f"{index} is not retrievable")
         elif isinstance(index, str):
-            assert index in self.filenames
+            if index not in self.filenames:
+                raise ValueError(f"{index} is not retrievable")
         else:
             raise ValueError(f"{index} is not retrievable")
         return True
