@@ -1,5 +1,6 @@
 import argparse
 import sys
+from molsim.utils.errors import ArgumentValidationError
 
 def main():
     parser = argparse.ArgumentParser(prog="molsim")
@@ -47,7 +48,13 @@ def main():
         sys.exit(0)
 
     args = parser.parse_args()  # 'command' is set to subcommand (e.g., xvg_min), 'func' points to the handler
-    args.func(args)              # Call the function associated with the chosen subcommand (main from xvg_min.py)
+    try:
+        args.func(args) # Call the function associated with the chosen subcommand (main from xvg_min.py)
+    except ArgumentValidationError as error:
+        RED = "\033[31m"
+        RESET = "\033[0m"
+        print(f"molsim {args.command}: {RED}input error{RESET}:\n {error}", file=sys.stderr)
+        return 2
 
 if __name__ == "__main__":
     main()

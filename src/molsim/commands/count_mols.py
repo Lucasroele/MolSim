@@ -5,6 +5,8 @@ from collections import Counter
 import re
 from pathlib import Path
 
+from molsim.utils.errors import ArgumentValidationError
+
 
 def register(subparsers):
     parser = subparsers.add_parser('count_mols',
@@ -26,7 +28,9 @@ def addArguments(parser):
     parser.add_argument('coordfile',
                         help='the coordinate file')
     parser.add_argument('topfile',
-                        help='the .top file')
+                        help='the .top file, if none is specified `topol.top` will be tried',
+                        nargs="?",
+                        default='topol.top')
     parser.add_argument('-o',
                         '--output',
                         help='specify a different output file')
@@ -34,7 +38,7 @@ def addArguments(parser):
                         '--skiplines',
                         default=None,
                         type=int,
-                        help='Set this to explicitly approve a number of lines inside the molecule block. Useful for macromolecules.')
+                        help='Set this to explicitly approve a number of information lines inside the molecule block. Useful for macromolecules.')
     parser.add_argument('-dontAdd',
                         action='store_true',
                         help='Set this to refraim from counting molecules into the topology that arent there yet.')
@@ -42,7 +46,7 @@ def addArguments(parser):
                         '--addMols',
                         type=str,
                         default=None,
-                        help='Add extra molecules to the molecules block with the given names.')
+                        help='Add extra molecules to the end of the molecules block with the given names. e.g.: `-am "SOL 1000"` will add 1000 SOL molecules to the molecules block. `-am "SOL 1000 NA 10"` will add 1000 SOL and 10 NA molecules. `-am "SOL"` will add 1 SOL molecule.')
     parser.add_argument('-f',
                         '--force',
                         action='store_true',
@@ -51,19 +55,24 @@ def addArguments(parser):
 
 
 def validateArguments(args):
-    if args.addMols is not None:
-        split_input = args.addMols.split()
-        len_split = len(split_input)
-        assert len_split % 2 == 0 or len_split == 1, "misformatted args.addMols argument, use either a single name to add a single molecule or space separated name-number pairs"
-        if len_split > 1:
-            for i in range(0,len_split,2):
-                assert split_input[i+1].isdigit(), f"`{args.addMols}` should be a string of name-number pairs separated by spaces"
-    assert Path(args.coordfile).is_file(), f"Coordinate file `{args.coordfile}` does not exist"
-    assert Path(args.topfile).is_file(), f"Topology file `{args.topfile}` does not exist"
+    if not Path(args.coordfile).is_file():
+        raise ArgumentValidationError(f"Coordinate file `{args.coordfile}` does not exist.")
+    if not Path(args.topfile).is_file():
+        raise ArgumentValidationError(f"Topology file `{args.topfile}` does not exist.")
     if args.output is None:
         args.output = args.topfile
     else:
-        assert not Path(args.output).is_file() or args.force, f"Output file `{args.output}` already exists and `-f` was not used"
+        if Path(args.output).is_file() and not args.force:
+            raise ArgumentValidationError(f"Output file `{args.output}` already exists and `-f` was not used.")
+    if args.addMols is not None:
+        split_input = args.addMols.split()
+        len_split = len(split_input)
+        if not (len_split % 2 == 0 or len_split == 1):
+            raise ArgumentValidationError("misformatted args.addMols argument, use either a single name to add a single molecule or space separated name-number pairs.")
+        if len_split > 1:
+            for i in range(0,len_split,2):
+                if not split_input[i+1].isdigit():
+                    raise ArgumentValidationError(f"`{args.addMols}` should be a string of name-number pairs separated by spaces.")
     return args
 
 
@@ -101,13 +110,19 @@ def main(args):
     u = mda.Universe(args.coordfile)
     mol_counter = Counter()
     mol_counter.update([residue.resname for residue in u.residues])
+    ordered_resnames = []
+    for residue in u.residues:
+        if residue.resname not in ordered_resnames:
+            ordered_resnames.append(residue.resname)
+    print(ordered_resnames)
     for aa in amino_acids:
         if aa in mol_counter.keys():
             del mol_counter[aa]
+        if aa in ordered_resnames:
+            ordered_resnames.remove(aa)
 
 
     start_marker = r"\s*\[ molecules \]\s*"
-    # old end_marker = r"\s*\[ (.*?) \]\s*"
     end_marker = r"\s*\[ (.*?) \]\s*|\s*#.*"
     molecules_block = []  # Filled with the molecules block (also empty lines)
     mols_n_counts = [[], []]  # What is inside the .top file, one entry in both lists for each molecule line
@@ -145,17 +160,23 @@ def main(args):
         sys.exit("There is nothing to count or change.")
 
     new_lines = []
+    # two output cases
     if inside_marker:  # `[ molecules ]` block found
         # counting update
-        assert args.skiplines is None or args.skiplines in range(len(subset_indices) + 1), 'Trying to skip more lines than there are in the `[ molecules ]` block'
+        if args.skiplines is not None and args.skiplines > len(subset_indices):
+            raise ArgumentValidationError(f"Trying to skip more lines than there are in the `[ molecules ]` block of {args.topfile}")
         remove_these_lines = []  # Will hold the line indices of the lines in the molcules block that should be discarded
         if len(subset_indices) > 1:
             for i, index in enumerate(subset_indices):
                 if args.skiplines is not None and i < args.skiplines: # Still need to empty mol_counter
                     if args.addMols is not None:
-                        assert molecules_block[index].split()[0] not in addMols.keys(), f"You can not add `{molecules_block[index].split()[0]}` and also skip the line it is in"  # Is this line actually needed?
+                        if molecules_block[index].split()[0] in addMols.keys():
+                            raise ArgumentValidationError(f"You can not add `{molecules_block[index].split()[0]}` and also skip the line it is in")
                     if molecules_block[index].split()[0] in mol_counter:
                         del mol_counter[molecules_block[index].split()[0]]
+                    else:
+                        # we assume the skipped line is a peptide that had its AA counts removed.
+                        pass
                     continue
                 if mols_n_counts[0][i] in mol_counter:
                     # adding to existing lines
@@ -249,7 +270,7 @@ def main(args):
 
         
         new_lines.append('\n')
-    elif j == 0: # Creating a molecules block
+    else: # Creating a molecules block
         if args.skiplines:
             print(f"Warning: you tried to skip a line using the `-skiplines`/`-sl` flag, but there is no molecules block in {args.coordfile}")
 
@@ -259,6 +280,7 @@ def main(args):
                     mol_counter[key] += val
                 else:
                     mol_counter[key] = val
+                ordered_resnames.append(key)
         maxlen = [max([len(str_) for str_ in mol_counter.keys()]) + spacer,
                   max([len(str(str_)) for str_ in mol_counter.values()])]
         for i, val in enumerate([14,9]):
@@ -272,8 +294,12 @@ def main(args):
         new_lines.append('\n[ molecules ]\n')
         new_lines.append('; Compound'.ljust(maxlen[0], ' ') + ' #mols'.rjust(maxlen[1], ' ') + '\n')
             #new_lines.append(args.addMols.ljust(maxlen[0], ' ') + '1'.rjust(maxlen[1], ' ') + '\n')
-        for key, count in mol_counter.items():
-            new_lines.append(key.ljust(maxlen[0], ' ') + str(count).rjust(maxlen[1], ' ') + '\n')
+        printed_resnames = []
+        for resname in ordered_resnames:
+            if resname in mol_counter:
+                printed_resnames.append(resname)
+                new_lines.append(resname.ljust(maxlen[0], ' ') + str(mol_counter[resname]).rjust(maxlen[1], ' ') + '\n')
+        assert not set(mol_counter.keys()) - set(printed_resnames)
     # Remove empty lines at end of file
         for i in reversed(range(len(lines))):
             if lines[i].strip(' ') == '\n':
