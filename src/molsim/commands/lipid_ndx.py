@@ -356,7 +356,7 @@ def main(args):
         names = new_names
         atoms = new_atoms
 
-    
+
     # Add the checking part for already present from split_mem
 
     # Output
