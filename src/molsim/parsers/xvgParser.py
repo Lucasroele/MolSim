@@ -5,6 +5,11 @@ import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from pathlib import Path
+import matplotlib.pyplot as plt
+import matplotlib as mpl
+from matplotlib.ticker import MultipleLocator, FormatStrFormatter
+from matplotlib.ticker import AutoMinorLocator
+from matplotlib.lines import Line2D
 
 class XvgParser:
     """
@@ -239,6 +244,189 @@ class XvgParser:
         # Update layout
         fig.update_layout(height=300 * len(self.filenames), showlegend=showlegend)
         fig.show()
+
+    def rmsd_plot(self, name, cname="Blues", title="", x_range_ns=1000, ylim=(0,0.2)):
+        # def plot_individual_rmsd_xvg_files(File_path1, File_path2, File_name, File_list, File_numbers, Name, CName, Colour, Title, ylim):
+        """Plot replica RMSD traces from GROMACS ``.xvg`` files and annotate summary statistics.
+
+        For every system in ``File_list``, the RMSD time series of each replica listed in
+        ``File_numbers`` is loaded and drawn on a single axes, with each replica shaded
+        from a sequential colormap. Per-replica mean RMSDs and their spread are printed,
+        and a summary of the mean and standard deviation is shown in the plot title. The
+        figure can optionally be saved as a 300 dpi PNG.
+
+        The path of each input file is built as::
+
+            {File_path1}{name}{File_path2}/{File_name}{replica}.xvg
+
+        where ``name`` is an entry of ``File_list`` and ``replica`` is a replica number
+        taken from the matching entry of ``File_numbers``.
+
+        :param File_path1: Prefix of the directory path, placed before the system name.
+            Also the base directory for saved figures (``{File_path1}Figures_paper/``).
+        :type File_path1: str
+        :param File_path2: Suffix of the directory path, placed after the system name
+            and before ``/``.
+        :type File_path2: str
+        :param File_name: Filename stem of the ``.xvg`` files. The replica number and
+            ``.xvg`` are appended, e.g. ``"rmsd_"`` gives ``rmsd_1.xvg``.
+        :type File_name: str
+        :param File_list: System/directory names to process. Each is substituted for
+            ``name`` in the path template above.
+        :type File_list: list[str]
+        :param File_numbers: Replica numbers for each system, parallel to ``File_list``.
+            Each element is a comma-separated string of integers, e.g. ``"1,2,3"``.
+        :type File_numbers: list[str]
+        :param Name: Label shown in the legend box.
+        :type Name: str
+        :param CName: Name of a Matplotlib colormap (e.g. ``"Blues"``) used to colour
+            individual replica traces. Sampled over the range 0.2 to 1 to avoid
+            near-white colours.
+        :type CName: str
+        :param Colour: A single Matplotlib colour used for the title text and the legend
+            line. It is independent of ``CName``, so choose a colour that matches the
+            colormap.
+        :type Colour: str or tuple
+        :param Title: Output filename stem. If truthy, the figure is saved to
+            ``{File_path1}Figures_paper/{Title}.png`` at 300 dpi. If empty or ``None``,
+            nothing is saved.
+        :type Title: str or None
+        :param ylim: Y-axis limits as ``(ymin, ymax)`` in nm.
+        :type ylim: tuple[float, float]
+
+        :returns: ``None``. The figure is displayed with ``plt.show()`` and optionally
+            written to disk.
+        :rtype: None
+
+        .. note::
+        **Statistics.** Two different quantities are reported:
+
+        * ``av_mean`` / ``av_sd``: the mean and standard deviation of all RMSD values
+            pooled over every replica of a system (all frames of all replicas).
+        * ``average_mean`` / ``average_std``: the mean and standard deviation of the
+            *per-replica* mean RMSDs, i.e. the between-replica spread.
+
+        The plot title shows ``av_mean ± average_std``, which mixes the pooled mean
+        with the between-replica standard deviation.
+
+        .. warning::
+        Only the **last** entry of ``File_list`` contributes to the title text and the
+        final printed summary, because the statistics variables are overwritten on each
+        iteration of the outer loop. All systems are drawn on the same axes, but only
+        the last is annotated. In practice this function is intended to be called with
+        a single-system ``File_list``.
+
+        .. warning::
+        All replicas of a system must have the same number of frames, since they are
+        stacked into a single array for the per-frame mean and standard deviation.
+        Those per-frame quantities are currently computed but not plotted (the
+        corresponding ``ax.plot`` and ``fill_between`` calls are commented out).
+
+        **Example**::
+
+            plot_individual_rmsd_xvg_files(
+                File_path1="/data/sims/", File_path2="/analysis", File_name="rmsd_",
+                File_list=["CNR4A_iBu"], File_numbers=["1,2,3,4,5"],
+                Name="CNR4A + iBu", CName="Blues", Colour="tab:blue",
+                Title="CNR4A_iBu_rmsd", ylim=(0.0, 4.0),
+            )
+        """
+        def block_average(x, y, n=5):
+            m = len(x) // n * n                      # drop leftover points that don't fill a block
+            x_new = x[:m].reshape(-1, n).mean(axis=1)
+            y_new = y[:m].reshape(-1, n).mean(axis=1)
+            return x_new, y_new
+
+        match cname:
+            case "Blues":
+                colour = "xkcd:vivid blue"
+            case "Oranges":
+                colour = "xkcd:bright orange"
+            case "Greens":
+                colour = "xkcd:green"
+            case "Purples":
+                colour = "xkcd:vivid purple"
+            case "Greys":
+                colour = "XKCD:black"
+            case _:
+                colour = "black"
+
+        # def plot_individual_rmsd_xvg_files(File_path1, File_path2, File_name, File_list, File_numbers, Name, CName, Colour, Title, ylim):
+        fig, ax = plt.subplots(figsize=(9,5))
+
+        #for name, simulations in zip(File_list, File_numbers):
+        all_variables = []
+        mean_list = []
+        #sim_numbers = [int(sim_num) for sim_num in simulations.split(',')]
+        cmap = mpl.colormaps[cname]
+        color = iter(cmap(np.linspace(0.2, 1, self.size)))
+
+        for filename in self.filenames:
+            data = self.get_numpy(filename)
+            n = int(len(data[0])/500)
+            x_or = (data[0]/1000)[:,None]
+            y_or = data[1][:,None]
+            x, y = block_average(x_or, y_or, n=n)
+            all_variables.append(y_or)
+            c = next(color)
+            ax.plot(x, y, color = c)
+
+            mean = np.mean(y)
+            mean_list.append(mean)
+
+        average_std = np.std(mean_list)
+        average_mean = np.mean(mean_list)
+
+        print(f'{name}: mean = {average_mean:5.3f} nm, std = {average_std:5.3f} nm')
+        # Calculate mean and standard deviation for each time point across simulations
+        concatenate = np.stack(all_variables, axis=1)
+        mean_data = concatenate.mean(axis=1)
+        sd_data = concatenate.std(axis=1)
+        x = np.arange(len(mean_data))
+        y = mean_data
+        error = sd_data/2
+        #ax.plot(x,y,label=f'{Name}', color=Colour[j])
+        #ax.fill_between(x, y-error, y+error, alpha=0.3, color=Colour)
+
+        print(f'{name}: mean = {average_mean:5.3f} nm, std = {average_std:5.3f} nm')
+
+        ax.set_xlabel('Time (ns)',fontsize=20)
+        ax.set_ylabel('RMSD (nm)',fontsize=20)
+        #plt.suptitle(name, fontsize= 15)# Add subtitle above the title
+        #plt.title(f'{average_mean:.2f} ± {average_std:.2f} nm', fontsize=20, x=0.16, y=0.75, color=colour) #x=0.85, y=0.01
+
+        ax.text(0.98, 0.03, f'{average_mean:.2f} ± {average_std:.2f} nm',
+        transform=ax.transAxes, fontsize=20, color=colour,
+        ha='right', va='bottom')
+
+        ax.minorticks_on()
+        ax.set_ylim(ylim)
+        ax.xaxis.set_minor_locator(AutoMinorLocator(5))
+        ax.yaxis.set_minor_locator(AutoMinorLocator(5))
+
+        ax.tick_params(which='both', width=2, labelsize=19)
+        ax.tick_params(which='major', direction='inout', length=8)
+        ax.tick_params(which='minor', length=4, direction = "in")
+        plt.rcParams['ytick.left'] = True
+        decimals_on_yaxis=2
+        decimals_on_xaxis=0
+        ax.yaxis.set_major_formatter(FormatStrFormatter(f"%.{decimals_on_yaxis}f"))
+        ax.xaxis.set_major_formatter(FormatStrFormatter(f"%.{decimals_on_xaxis}f"))
+        ax.set_xlim(-10, x_range_ns + 10)
+        #plt.title('Average RMSD', fontsize=18)
+        #fig.legend(fontsize=11, bbox_to_anchor=(1.01,1),loc='upper left')
+
+        box = ax.get_position()
+        ax.set_position([box.x0, box.y0, box.width * 1, box.height])
+        #fig.legend(loc = 'upper right',bbox_to_anchor=(0.99, 0.85),fontsize=20)
+        custom_line = [Line2D([0], [0], color=colour, lw=2)]
+        ax.legend(custom_line, [f"{name}"], bbox_to_anchor=(0.02, 0.85), loc='lower left',
+                        ncols=1, borderaxespad=0., fontsize=20)
+        plt.tight_layout()
+        if title:
+            plt.savefig(f"{self.path}/{title}.png", dpi=300)
+
+        plt.show()
 
     def __len__(self):
         return self.size
