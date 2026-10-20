@@ -10,11 +10,12 @@ import matplotlib as mpl
 from matplotlib.ticker import MultipleLocator, FormatStrFormatter
 from matplotlib.ticker import AutoMinorLocator
 from matplotlib.lines import Line2D
+from os.path import commonprefix
 
 class XvgParser:
     """
     Parse multiple .xvg files
-    
+
     Instantiation:
         xvg = XvgParser(filenames, path=None)
     Arguments:
@@ -32,7 +33,7 @@ class XvgParser:
     size      = number of entries
     """
 
-    def __init__(self, filenames, path=None):
+    def __init__(self, filenames, path=None, pp=True):
         self.data = []
         self.metadata = []
         # Handle path
@@ -42,7 +43,8 @@ class XvgParser:
             self.path = path
         else:
             self.path = Path('.')
-        assert self.path.is_dir(), f"The directory `{path}` does not exist."
+        if not self.path.is_dir():
+            raise FileNotFoundError(f"The directory `{path}` does not exist.")
         # Prepare filenames
         if isinstance(filenames, str):
             self.filenames = [filenames]
@@ -59,8 +61,10 @@ class XvgParser:
         else:
             raise ValueError("First argument must be a `str`, `Path`, `[str]` or `[Path]`.")
         for f in self.filepaths:
-            assert f.suffix == '.xvg', "All files must have the .xvg extension."
-            assert f.is_file(), f"File `{f}` does not exist."
+            if f.suffix != '.xvg':
+                raise TypeError("All files must have the .xvg extension.")
+            if not f.is_file():
+                raise FileNotFoundError(f"File `{f}` does not exist.")
         # Parse files
         for i, filename in enumerate(self.filepaths):
             reading_data = False
@@ -143,51 +147,52 @@ class XvgParser:
                     for k, cel in enumerate(infoline):
                         tempdata[k].append(float(cel))
                     prev_line = line
-                self.data.append(np.array(tempdata))
+            self.data.append(np.array(tempdata))
+            assert len(self.metadata[i]['columns']) == len(tempdata), f"{len(self.metadata[i]['columns'])} != {len(tempdata)}"
+            if pp:
+                self._ppInit(i)
 
-
-                assert len(self.metadata[i]['columns']) == len(tempdata), f"{len(self.metadata[i]['columns'])} != {len(tempdata)}"
         self.size = len(self.data)
-        
 
-    def info(self):
-        for i, filename in enumerate(self.filenames):
-            print(f"File {i}: {filename}")
-            print(f"  Title: {self.metadata[i].get('title', 'N/A')}")
-            print(f"  X-axis: {self.metadata[i].get('xaxis', 'N/A')}")
-            print(f"  Y-axis: {self.metadata[i].get('yaxis', 'N/A')}")
-            print(f"  Columns: {self.metadata[i]['columns']}")
-            print(f"  Number of data points: {self.data[i].shape[1]}")
+    def _ppInit(self, index):
+        if self.metadata[index]['yaxis'] == "(nm)" and \
+           self.metadata[index]['title'] == "RMS fluctuation":
+            self.metadata[index]['yaxis'] = "RMSF (nm)"
+            self.metadata[index]['columns'][1] = "RMSF (nm)"
+
+
+    def info(self, index=None):
+        def printInfo(index):
+            print(f"File {index}: {self.filenames[index]}")
+            print(f"  Title: {self.metadata[index].get('title', 'N/A')}")
+            print(f"  X-axis: {self.metadata[index].get('xaxis', 'N/A')}")
+            print(f"  Y-axis: {self.metadata[index].get('yaxis', 'N/A')}")
+            print(f"  Columns: {self.metadata[index]['columns']}")
+            print(f"  Number of data points: {self.data[index].shape[1]}")
             print("")
 
+        if index is None:
+            for i, filename in enumerate(self.filenames):
+                printInfo(i)
+        else:
+            index=self._resolveIndex(index)
+            printInfo(index)
 
-
-    def get_numpy(self, index):  # returns as rows of datapoints
-        assert self._indexIsRetrievable(index)
-        if isinstance(index, str):
-            return self.data[self._indexOfFilename(index)]
-        else:  # Must be int
-            return self.data[index]
+    def get_numpy(self, index):
+        index = self._resolveIndex(index)
+        return self.data[index]
 
     def get_pandas(self, index):  # returns as columns of datapoints
-        assert self._indexIsRetrievable(index)
-        if isinstance(index, str):
-            return pd.DataFrame(data=self.data[self._indexOfFilename(index)].T,
-                                columns=self.metadata[self._indexOfFilename(index)]['columns'])
-        else:  # Must be int
-            return pd.DataFrame(data=self.data[index],
-                                columns=self.metadata[index]['columns'])
+        index = self._resolveIndex(index)
+        return pd.DataFrame(data=self.data[index],
+                            columns=self.metadata[index]['columns'])
 
     def get_polars(self, index):
-        assert self._indexIsRetrievable(index)
-        if isinstance(index, str):
-            return polars.DataFrame(data=self.data[self._indexOfFilename(index)].T,
-                                    schema=self.metadata[self._indexOfFilename(index)]['columns'])
-        else:
-            return polars.DataFrame(data=self.data[index],
-                                    schema=self.metadata[index]['columns'])
+        index = self._resolveIndex(index)
+        return polars.DataFrame(data=self.data[index],
+                                schema=self.metadata[index]['columns'])
 
-    def plot(self, all_in_one=False, subplot_titles=None, showlegend=True):
+    def plot(self, all_in_one=False, subplot_titles=None, showlegend=True, traces=None):
         """
         all_in_one:     overlay all data into a single plot
         subplot_titles: define titles for the plots (default = filenames)
@@ -199,10 +204,14 @@ class XvgParser:
                 subplot_titles = [str(subplot_titles)]
             else:
                 subplot_titles = ["All together"]
+            if traces is None:
+                p = len(commonprefix(self.filenames))
+                s = len(commonprefix([x[::-1] for x in self.filenames]))
+                traces = [x[p:max(p, len(x) - s)] for x in self.filenames]
         else:
             rows = self.size
             if subplot_titles is not None:
-                if len(subplot_titles) != len(self.size):
+                if len(subplot_titles) != self.size:
                     raise ValueError(f"The argument `subplot_titles` should be of lenght: {self.size}")
             else:
                 subplot_titles = [Path(f).stem for f in self.filenames]
@@ -217,7 +226,7 @@ class XvgParser:
                     fig.add_trace(go.Scatter(x=data[0],
                                              y=row,
                                              legendgroup=self.filenames[i] + self.metadata[i]['columns'][j],
-                                             name=self.metadata[i]['columns'][j]),
+                                             name=traces[i]),
                                   row=1,
                                   col=1)
                 else:
@@ -242,7 +251,9 @@ class XvgParser:
                                      row=i + 1,
                                      col=1)
         # Update layout
-        fig.update_layout(height=300 * len(self.filenames), showlegend=showlegend)
+        fig.update_layout(showlegend=showlegend)
+        if not all_in_one:
+            fig.update_layout(height=300 * len(self.filenames))
         fig.show()
 
     def rmsd_plot(self, name, cname="Blues", title="", x_range_ns=1000, ylim=(0,0.2)):
@@ -459,16 +470,15 @@ class XvgParser:
         assert len(ret_string) != 0
         return ret_string.strip('"')
 
-    def _indexOfFilename(self, filename):
-        for i, f in enumerate(self.filenames):
-            if filename == f:
-                return i
-
-    def _indexIsRetrievable(self, index):
+    def _validateIndex(self, index):
+        if not isinstance(index, (int, str)):
+            raise TypeError(f"index must be int or str, got {type(index).__name__}")
         if isinstance(index, int):
-            assert index in range(self.size)
-        elif isinstance(index, str):
-            assert index in self.filenames
-        else:
-            raise ValueError(f"{index} is not retrievable")
-        return True
+            if not 0 <= index < self.size:
+                raise IndexError(f"index {index} out of range for size {self.size}")
+        elif index not in self.filenames:
+            raise KeyError(f"{index} is not retrievable")
+
+    def _resolveIndex(self, index):
+        self._validateIndex(index)
+        return self.filenames.index(index) if isinstance(index, str) else index
