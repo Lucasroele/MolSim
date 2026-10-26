@@ -1,3 +1,4 @@
+from matplotlib.pylab import trace
 import numpy as np
 import pandas as pd
 import polars
@@ -218,10 +219,13 @@ class XvgParser:
         fig = make_subplots(rows=rows,
                             cols=1,
                             subplot_titles=subplot_titles)
+        max_j = 0
         for i, data in enumerate(self.data):  # subplots
             for j, row in enumerate(data):  # rows
                 if j == 0:
                     continue
+                if j > max_j:
+                    max_j = j
                 if all_in_one:
                     fig.add_trace(go.Scatter(x=data[0],
                                              y=row,
@@ -237,7 +241,8 @@ class XvgParser:
                                        legendgroup=self.metadata[i]['columns'][j],
                                        name=self.metadata[i]['columns'][j])
                     if i > 0:
-                        trace['showlegend'] = False
+                        if trace['name'] in [t['name'] for t in fig.data]:
+                            trace['showlegend'] = False
                     fig.add_trace(trace,
                                   row=use_row,
                                   col=1)
@@ -250,10 +255,25 @@ class XvgParser:
                     fig.update_yaxes(title_text=self.metadata[i]['yaxis'],
                                      row=i + 1,
                                      col=1)
+
+        names_colors = {}
+        alt_col_counter = 0
+        for t in fig.data:
+            if t['name'] not in names_colors:
+                cur_colors = list(dict.fromkeys(color for color in names_colors.values()))
+                names_colors[t['name']] = t['line']['color']
+                if t['line']['color'] in cur_colors:
+                    alt_col_counter += 1
+                    t['line']['color'] = colors[alt_col_counter + max_j]
+
         # Update layout
         fig.update_layout(showlegend=showlegend)
-        if not all_in_one:
-            fig.update_layout(height=300 * len(self.filenames))
+        # Create list of list of legend entries for each subplot
+        if not all_in_one or rows > 1:
+            i_height = max(300, len(names_colors) * 50 + 20)
+            fig.update_layout(height=i_height * len(self.filenames))
+        i_height = max(300, len(names_colors) * 50 + 20)
+        fig.update_layout(height=i_height * len(self.filenames))
         fig.show()
 
     def rmsd_plot(self, name, cname="Blues", fname="", x_range_ns=1000, ylim=(0,0.2)):

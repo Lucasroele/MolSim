@@ -7,6 +7,7 @@ from pathlib import Path
 
 from molsim.utils.files import getFileNames
 from molsim.parsers.xvgParser import XvgParser
+from molsim.utils.errors import *
 
 
 def register(subparsers):
@@ -28,6 +29,7 @@ def parseArguments():
 def addArguments(parser):
     parser.add_argument('filenames',
                         nargs='*',
+                        default=[],
                         help='the .xvg file(s).')           # positional argument
     parser.add_argument('-d',
                         '--dir',
@@ -39,22 +41,27 @@ def addArguments(parser):
 
 def validateArguments(args):
     running_folder = os.getcwd()
-    if args.dir is not None and args.filenames is not []:
+    if args.dir is not None and args.filenames:
         print("Note: The --dir argument is ignored when filenames are supplied.")
-    if args.filenames == []:
+    if not args.filenames:
         if args.dir is None:
             args.filenames = getFileNames(".xvg")
         else:
-            assert Path(args.dir).is_dir(), "Error: The directory `" + args.dir + "` does not exist."
-            args.filenames = getFileNames(".xvg", path=args.dir)
-        assert len(args.filenames) > 0, "Error: " + "No .xvg files found in " + (args.dir if args.dir is not None else running_folder) + "."
+            if not Path(args.dir).is_dir():
+                raise ArgumentValidationError(f"The directory `{args.dir}` does not exist.")
+            else:
+                args.filenames = getFileNames(".xvg", path=args.dir)
+        if not args.filenames:
+            raise ArgumentValidationError(f"No .xvg files found in `{args.dir if args.dir is not None else running_folder}`.")
     else:
         for filename in args.filenames:
-            assert os.path.exists(filename), "Error: The file `" + filename + "` does not exist."
+            if not Path(filename).is_file():
+                raise ArgumentValidationError(f"The file `{filename}` does not exist.")
     return args
 
 
 def makeFig(filenames, dataset):
+    # would split into several graphs the different columns of the xvg file
     # Create 2d list with plot titles
     cols = max([len(dataset[filename]) - 1 for filename in filenames])
     subplot_titles = [["" if j > len(dataset[filename]) - 1 else dataset.metadata[i]['columns'][j] for j in range(1+cols)[1:]] for i, filename in enumerate(filenames)]
@@ -86,11 +93,9 @@ def main(args):
         dataset = XvgParser(args.filenames, path=args.dir)
     else:
         dataset = XvgParser(args.filenames)
-    #filenames = getFileNames(".xvg")
-    #dataset = getDataFromXmgrFiles(args.filenames)
-    fig = makeFig(args.filenames, dataset)
-    # Display the plot
-    fig.show()
+    dataset.plot()
+    #fig = makeFig(args.filenames, dataset)
+    #fig.show()
 
 
 
