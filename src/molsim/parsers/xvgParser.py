@@ -256,7 +256,7 @@ class XvgParser:
             fig.update_layout(height=300 * len(self.filenames))
         fig.show()
 
-    def rmsd_plot(self, name, cname="Blues", title="", x_range_ns=1000, ylim=(0,0.2)):
+    def rmsd_plot(self, name, cname="Blues", fname="", x_range_ns=1000, ylim=(0,0.2)):
         # def plot_individual_rmsd_xvg_files(File_path1, File_path2, File_name, File_list, File_numbers, Name, CName, Colour, Title, ylim):
         """Plot replica RMSD traces from GROMACS ``.xvg`` files and annotate summary statistics.
 
@@ -388,7 +388,6 @@ class XvgParser:
         average_std = np.std(mean_list)
         average_mean = np.mean(mean_list)
 
-        print(f'{name}: mean = {average_mean:5.3f} nm, std = {average_std:5.3f} nm')
         # Calculate mean and standard deviation for each time point across simulations
         concatenate = np.stack(all_variables, axis=1)
         mean_data = concatenate.mean(axis=1)
@@ -399,7 +398,6 @@ class XvgParser:
         #ax.plot(x,y,label=f'{Name}', color=Colour[j])
         #ax.fill_between(x, y-error, y+error, alpha=0.3, color=Colour)
 
-        print(f'{name}: mean = {average_mean:5.3f} nm, std = {average_std:5.3f} nm')
 
         ax.set_xlabel('Time (ns)',fontsize=20)
         ax.set_ylabel('RMSD (nm)',fontsize=20)
@@ -434,8 +432,8 @@ class XvgParser:
         ax.legend(custom_line, [f"{name}"], bbox_to_anchor=(0.02, 0.85), loc='lower left',
                         ncols=1, borderaxespad=0., fontsize=20)
         plt.tight_layout()
-        if title:
-            plt.savefig(f"{self.path}/{title}.png", dpi=300)
+        if fname:
+            plt.savefig(f"{self.path}/{fname}.png", dpi=300)
 
         plt.show()
 
