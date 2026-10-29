@@ -12,6 +12,7 @@ from matplotlib.ticker import MultipleLocator, FormatStrFormatter
 from matplotlib.ticker import AutoMinorLocator
 from matplotlib.lines import Line2D
 from os.path import commonprefix
+import json
 
 class XvgParser:
     """
@@ -32,6 +33,7 @@ class XvgParser:
     metadata  = [{key, val}]
     path      = path to files
     size      = number of entries
+    colorsets = {name: matplotlib xkcd colormap}
     """
 
     def __init__(self, filenames, path=None, pp=True):
@@ -154,6 +156,12 @@ class XvgParser:
                 self._ppInit(i)
 
         self.size = len(self.data)
+        self.colorsets = {}
+        self.colorsets["Blues"] = "xkcd:vivid blue"
+        self.colorsets["Oranges"] = "xkcd:bright orange"
+        self.colorsets["Greens"] = "xkcd:green"
+        self.colorsets["Purples"] = "xkcd:vivid purple"
+        self.colorsets["Greys"] = "xkcd:black"
 
     def _ppInit(self, index):
         if self.metadata[index]['yaxis'] == "(nm)" and \
@@ -368,29 +376,17 @@ class XvgParser:
             y_new = y[:m].reshape(-1, n).mean(axis=1)
             return x_new, y_new
 
-        match cname:
-            case "Blues":
-                colour = "xkcd:vivid blue"
-            case "Oranges":
-                colour = "xkcd:bright orange"
-            case "Greens":
-                colour = "xkcd:green"
-            case "Purples":
-                colour = "xkcd:vivid purple"
-            case "Greys":
-                colour = "XKCD:black"
-            case _:
-                colour = "black"
 
         # def plot_individual_rmsd_xvg_files(File_path1, File_path2, File_name, File_list, File_numbers, Name, CName, Colour, Title, ylim):
         fig, ax = plt.subplots(figsize=(9,5))
 
-        #for name, simulations in zip(File_list, File_numbers):
         all_variables = []
         mean_list = []
-        #sim_numbers = [int(sim_num) for sim_num in simulations.split(',')]
         cmap = mpl.colormaps[cname]
+        # `color` for individual RMSD traces
         color = iter(cmap(np.linspace(0.2, 1, self.size)))
+        # `colour` for annotation text and the legend line
+        colour = colors[len(colors) // 2]
 
         for filename in self.filenames:
             data = self.get_numpy(filename)
@@ -456,6 +452,53 @@ class XvgParser:
             plt.savefig(f"{self.path}/{fname}.png", dpi=300)
 
         plt.show()
+
+    def rmsf_plot(self, name, cname="Blues", fname="", equiv=None, x_range_ns=1000, ylim=(0,0.2)):
+        for i, data in enumerate(self.data):
+            if i == 0:
+                first_len = len(data[0])
+                continue
+            if len(data[0]) != first_len:
+                raise ValueError(f"All .xvg files must have the same number of data points. File {self.filenames[i]} has {len(data[0])} points, while the first file has {first_len}.")
+
+        ave = []
+        sd
+        if equiv is not None:
+            if isinstance(equiv, (list, tuple)):
+                pass
+            elif isinstance(equiv, str) or isinstance(equiv, Path):
+                with open(equiv) as f:
+                    equiv = json.load(f)
+            else:
+                raise ValueError(f"Argument `equiv` is invalid.")
+            if len(list(it.chain.from_iterable(equiv))) != first_len:
+                raise ValueError(f"Argument `equiv` must have the same number of elements as the number of data points in the .xvg files. Expected {first_len}, got {len(it.chain.from_iterable(equiv))}.")
+            # dev: do data condensation
+        else:
+            #np view of the columns of the data
+            data_array = np.array([data[1] for data in self.data])
+            ave = np.mean(data_array, axis=0)
+            sd = np.std(data_array, axis=0)
+            print(len(ave), len(sd))
+
+            #for i in range(first_len):
+
+
+
+
+
+
+            elif isinstance(equiv, Path):
+            if not Path(equiv).is_file():
+                raise FileNotFoundError(f"The file `{equiv}` does not exist.")
+            try:
+
+            , f"The file `{equiv}` does not exist."
+        else:
+
+
+            i
+        if 
 
     def __len__(self):
         return self.size
