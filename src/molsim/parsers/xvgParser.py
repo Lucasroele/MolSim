@@ -453,6 +453,58 @@ class XvgParser:
             plt.savefig(f"{self.path}/{fname}.png", dpi=300)
         plt.show()
 
+    def rmsf_plot(self, name, cname="Blues", fname="", equiv=None, x_range_ns=1000, ylim=(0,0.2)):
+        for i, data in enumerate(self.data):
+            if i == 0:
+                first_len = len(data[0])
+                continue
+            if len(data[0]) != first_len:
+                raise ValueError(f"All .xvg files must have the same number of data points. File {self.filenames[i]} has {len(data[0])} points, while the first file has {first_len}.")
+
+        ave = []
+        sd
+        if equiv is not None:
+            if isinstance(equiv, (list, tuple)):
+                pass
+            elif isinstance(equiv, str) or isinstance(equiv, Path):
+                with open(equiv) as f:
+                    equiv = json.load(f)
+            else:
+                raise ValueError(f"Argument `equiv` is invalid.")
+            if len(list(it.chain.from_iterable(equiv))) != first_len:
+                raise ValueError(f"Argument `equiv` must have the same number of elements as the number of data points in the .xvg files. Expected {first_len}, got {len(it.chain.from_iterable(equiv))}.")
+            # dev: do data condensation
+        else:
+            #np view of the columns of the data
+            data_array = np.array([data[1] for data in self.data])
+            ave = np.mean(data_array, axis=0)
+            sd = np.std(data_array, axis=0)
+            print(len(ave), len(sd))
+
+            #for i in range(first_len):
+
+
+
+
+
+
+#            elif isinstance(equiv, Path):
+#            if not Path(equiv).is_file():
+#                raise FileNotFoundError(f"The file `{equiv}` does not exist.")
+#            try:
+#
+#            , f"The file `{equiv}` does not exist."
+#        else:
+#
+#
+#            i
+#        if 
+
+    def msd_plot(self, name, cname="Blues", fname="", x_range_ns=1000, ylim=(0,3)):
+        # uses the same template as the rmsd_plot method
+
+
+
     def __len__(self):
         return self.size
 
