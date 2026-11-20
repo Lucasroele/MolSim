@@ -12,7 +12,6 @@ from matplotlib.ticker import MultipleLocator, FormatStrFormatter
 from matplotlib.ticker import AutoMinorLocator
 from matplotlib.lines import Line2D
 from os.path import commonprefix
-import json
 
 class XvgParser:
     """
@@ -33,7 +32,6 @@ class XvgParser:
     metadata  = [{key, val}]
     path      = path to files
     size      = number of entries
-    colorsets = {name: matplotlib xkcd colormap}
     """
 
     def __init__(self, filenames, path=None, pp=True):
@@ -280,13 +278,17 @@ class XvgParser:
         if not all_in_one or rows > 1:
             i_height = max(300, len(names_colors) * 50 + 20)
             fig.update_layout(height=i_height * len(self.filenames))
-        i_height = max(300, len(names_colors) * 50 + 20)
-        fig.update_layout(height=i_height * len(self.filenames))
+        else:
+            fig.update_layout(height=600)
         fig.show()
 
-    def rmsd_plot(self, name, cname="Blues", fname="", x_range_ns=1000, ylim=(0,0.2)):
+    def rmsd_plot(self, name, cname="Blues", title="", fname="", x_range_ns=1000, ylim=(0,0.2), fontsize=15):
         # def plot_individual_rmsd_xvg_files(File_path1, File_path2, File_name, File_list, File_numbers, Name, CName, Colour, Title, ylim):
-        """Plot replica RMSD traces from GROMACS ``.xvg`` files and annotate summary statistics.
+        """
+        This is prob deprecated largely
+
+
+        Plot replica RMSD traces from GROMACS ``.xvg`` files and annotate summary statistics.
 
         For every system in ``File_list``, the RMSD time series of each replica listed in
         ``File_numbers`` is loaded and drawn on a single axes, with each replica shaded
@@ -384,20 +386,17 @@ class XvgParser:
         mean_list = []
         cmap = mpl.colormaps[cname]
         # `color` for individual RMSD traces
-        color = iter(cmap(np.linspace(0.2, 1, self.size)))
+        color = cmap(np.linspace(0.2, 1, self.size))
         # `colour` for annotation text and the legend line
-        colour = colors[len(colors) // 2]
-
-        for filename in self.filenames:
+        colour = color[self.size // 2]
+        for filename, c in zip(self.filenames, color):
             data = self.get_numpy(filename)
             n = int(len(data[0])/500)
             x_or = (data[0]/1000)[:,None]
             y_or = data[1][:,None]
             x, y = block_average(x_or, y_or, n=n)
             all_variables.append(y_or)
-            c = next(color)
             ax.plot(x, y, color = c)
-
             mean = np.mean(y)
             mean_list.append(mean)
 
@@ -447,58 +446,12 @@ class XvgParser:
         custom_line = [Line2D([0], [0], color=colour, lw=2)]
         ax.legend(custom_line, [f"{name}"], bbox_to_anchor=(0.02, 0.85), loc='lower left',
                         ncols=1, borderaxespad=0., fontsize=20)
+        if title:
+            ax.set_title(title, fontsize=fontsize)
         plt.tight_layout()
         if fname:
             plt.savefig(f"{self.path}/{fname}.png", dpi=300)
-
         plt.show()
-
-    def rmsf_plot(self, name, cname="Blues", fname="", equiv=None, x_range_ns=1000, ylim=(0,0.2)):
-        for i, data in enumerate(self.data):
-            if i == 0:
-                first_len = len(data[0])
-                continue
-            if len(data[0]) != first_len:
-                raise ValueError(f"All .xvg files must have the same number of data points. File {self.filenames[i]} has {len(data[0])} points, while the first file has {first_len}.")
-
-        ave = []
-        sd
-        if equiv is not None:
-            if isinstance(equiv, (list, tuple)):
-                pass
-            elif isinstance(equiv, str) or isinstance(equiv, Path):
-                with open(equiv) as f:
-                    equiv = json.load(f)
-            else:
-                raise ValueError(f"Argument `equiv` is invalid.")
-            if len(list(it.chain.from_iterable(equiv))) != first_len:
-                raise ValueError(f"Argument `equiv` must have the same number of elements as the number of data points in the .xvg files. Expected {first_len}, got {len(it.chain.from_iterable(equiv))}.")
-            # dev: do data condensation
-        else:
-            #np view of the columns of the data
-            data_array = np.array([data[1] for data in self.data])
-            ave = np.mean(data_array, axis=0)
-            sd = np.std(data_array, axis=0)
-            print(len(ave), len(sd))
-
-            #for i in range(first_len):
-
-
-
-
-
-
-            elif isinstance(equiv, Path):
-            if not Path(equiv).is_file():
-                raise FileNotFoundError(f"The file `{equiv}` does not exist.")
-            try:
-
-            , f"The file `{equiv}` does not exist."
-        else:
-
-
-            i
-        if 
 
     def __len__(self):
         return self.size

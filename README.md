@@ -8,7 +8,7 @@ Then, install using:<br>
 (don't forget the dot ⟶ .)
 
 ```bash
-pip install -e .
+uv pip install -e .
 ```
 
 ## Usage
