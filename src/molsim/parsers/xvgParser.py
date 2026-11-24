@@ -22,7 +22,11 @@ class XvgParser:
     Arguments:
         filenames: str | Path | [str] | [Path]
         path: str | Path
-
+    Usage:
+        ```
+        for d in xvg:
+            print(d)  # np.ndarray of data`
+        ```
 
 
     self.attributes
@@ -186,6 +190,9 @@ class XvgParser:
             printInfo(index)
 
     def get_numpy(self, index):
+        """
+        Data is stored as a numpy.ndarray so this returns a view.
+        """
         index = self._resolveIndex(index)
         return self.data[index]
 
@@ -282,7 +289,7 @@ class XvgParser:
             fig.update_layout(height=600)
         fig.show()
 
-    def rmsd_plot(self, name, cname="Blues", title="", fname="", x_range_ns=1000, ylim=(0,0.2), fontsize=15):
+    def rmsd_plot(self, name, cname="Blues", title="", fname="", x_range_ns=1000, ylim=(0,0.2), fontsize=20):
         # def plot_individual_rmsd_xvg_files(File_path1, File_path2, File_name, File_list, File_numbers, Name, CName, Colour, Title, ylim):
         """
         This is prob deprecated largely
@@ -418,10 +425,8 @@ class XvgParser:
         ax.set_ylabel('RMSD (nm)',fontsize=20)
         #plt.suptitle(name, fontsize= 15)# Add subtitle above the title
         #plt.title(f'{average_mean:.2f} ± {average_std:.2f} nm', fontsize=20, x=0.16, y=0.75, color=colour) #x=0.85, y=0.01
-
         ax.text(0.98, 0.03, f'{average_mean:.2f} ± {average_std:.2f} nm',
-        transform=ax.transAxes, fontsize=20, color=colour,
-        ha='right', va='bottom')
+        transform=ax.transAxes, fontsize=20, color=colour, ha='right', va='bottom')
 
         ax.minorticks_on()
         ax.set_ylim(ylim)
@@ -436,7 +441,7 @@ class XvgParser:
         decimals_on_xaxis=0
         ax.yaxis.set_major_formatter(FormatStrFormatter(f"%.{decimals_on_yaxis}f"))
         ax.xaxis.set_major_formatter(FormatStrFormatter(f"%.{decimals_on_xaxis}f"))
-        ax.set_xlim(-10, x_range_ns + 10)
+        ax.set_xlim(-x_range_ns/100, x_range_ns + x_range_ns/100)
         #plt.title('Average RMSD', fontsize=18)
         #fig.legend(fontsize=11, bbox_to_anchor=(1.01,1),loc='upper left')
 
@@ -500,8 +505,71 @@ class XvgParser:
 #            i
 #        if 
 
-    def msd_plot(self, name, cname="Blues", fname="", x_range_ns=1000, ylim=(0,3)):
+    def msd_plot(self, name, cname="Blues", title="", fontsize=20, fname="", x_range_ns=None, ylim=(0, 0), ylabel=''):
+        
+        if x_range_ns is None:
+            x_range_ns = max([max(data[0]) for data in self.data]) / 1000
+        if ylim == (0, 0):
+            y_max = max([max(data[1]) for data in self.data])
+            ylim = (0, y_max * 1.1)
         # uses the same template as the rmsd_plot method
+        fig, ax = plt.subplots(figsize=(9,5))
+
+        cmap = mpl.colormaps[cname]
+        # `color` for individual RMSD traces
+        color = cmap(np.linspace(0.2, 1, self.size))
+        # `colour` for annotation text and the legend line
+        colour = color[self.size // 2]
+        for filename, c in zip(self.filenames, color):
+            data = self.get_numpy(filename)
+            x = data[0]/1000
+            y = data[1]
+            ax.plot(x, y, color = c)
+        ax.set_xlabel(r'$\tau$ (ns)',fontsize=20)
+        if ylabel:
+            ax.set_ylabel(ylabel, fontsize=20)
+        else:
+            ax.set_ylabel(r'MSD (nm$^2$)',fontsize=20)
+        # plant the D
+        D_vals = [float(s["columns"][1].split()[2]) for s in self.metadata]
+        D_mean = np.mean(D_vals)
+        D_std = np.std(D_vals)
+        exponent = int(np.floor(np.log10(abs(D_mean))))
+        scale = 10**exponent
+        print_exponent = -5 + exponent
+        ax.text(
+            0.98, 0.03,
+            rf'$D = ({D_mean/scale:.2f} \pm {D_std/scale:.2f})\times 10^{{{print_exponent}}}\ \mathrm{{cm}}^2$',
+            transform=ax.transAxes, fontsize=20, color=colour,
+            ha='right', va='bottom'
+        )
+        ax.minorticks_on()
+        ax.set_ylim(ylim)
+        ax.xaxis.set_minor_locator(AutoMinorLocator(5))
+        ax.yaxis.set_minor_locator(AutoMinorLocator(5))
+        ax.tick_params(which='both', width=2, labelsize=19)
+        ax.tick_params(which='major', direction='inout', length=8)
+        ax.tick_params(which='minor', length=4, direction = "in")
+        plt.rcParams['ytick.left'] = True
+        decimals_on_yaxis=2
+        decimals_on_xaxis=0
+        ax.yaxis.set_major_formatter(FormatStrFormatter(f"%.{decimals_on_yaxis}f"))
+        ax.xaxis.set_major_formatter(FormatStrFormatter(f"%.{decimals_on_xaxis}f"))
+        ax.set_xlim(-x_range_ns/100, x_range_ns + x_range_ns/100)
+
+        box = ax.get_position()
+        ax.set_position([box.x0, box.y0, box.width * 1, box.height])
+        #fig.legend(loc = 'upper right',bbox_to_anchor=(0.99, 0.85),fontsize=20)
+        custom_line = [Line2D([0], [0], color=colour, lw=2)]
+        ax.legend(custom_line, [f"{name}"], bbox_to_anchor=(0.02, 0.85), loc='lower left',
+                        ncols=1, borderaxespad=0., fontsize=20)
+        if title:
+            ax.set_title(title, fontsize=fontsize)
+        plt.tight_layout()
+        if fname:
+            plt.savefig(f"{self.path}/{fname}.png", dpi=300)
+        plt.show()
+
 
 
 
