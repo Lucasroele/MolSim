@@ -1,3 +1,4 @@
+import json
 from matplotlib.pylab import trace
 import numpy as np
 import pandas as pd
@@ -8,7 +9,7 @@ from plotly.subplots import make_subplots
 from pathlib import Path
 import matplotlib.pyplot as plt
 import matplotlib as mpl
-from matplotlib.ticker import MultipleLocator, FormatStrFormatter
+from matplotlib.ticker import MultipleLocator, FormatStrFormatter, FuncFormatter
 from matplotlib.ticker import AutoMinorLocator
 from matplotlib.lines import Line2D
 from os.path import commonprefix
@@ -289,289 +290,499 @@ class XvgParser:
             fig.update_layout(height=600)
         fig.show()
 
-    def rmsd_plot(self, name, cname="Blues", title="", fname="", x_range_ns=1000, ylim=(0,0.2), fontsize=20):
-        # def plot_individual_rmsd_xvg_files(File_path1, File_path2, File_name, File_list, File_numbers, Name, CName, Colour, Title, ylim):
+    @classmethod
+    def plot_scaffold(
+        cls,
+        data,
+        name="",
+        cname="Blues",
+        title="",
+        fontsize=20,
+        fname="",
+        path=None,
+        xlabel=None,
+        ylabel=None,
+        labels=None,
+        stds=None,
+        band_scale=0.5,
+        x_limits=None,
+        y_limits=None,
+        tick_labels=None,
+        block_size=None,
+        tick_spacing=1,
+        decimals_on_xaxis=None,
+        decimals_on_yaxis=2,
+        annotation=None,
+        show=True,
+    ):
         """
-        This is prob deprecated largely
+        This classmethod is currently being used by:
+            - rmsd_plot()
+            - rmsf_plot()
+            - msd_plot()
+        
+        Plot XVG files or channel-first NumPy arrays with shared styling.
 
+        ``data`` may be an XVG filename, a sequence of XVG filenames, a
+        ``(channels, points)`` array, or a sequence of such arrays. The first
+        two channels are used as x and y values. When ``stds`` is supplied,
+        each corresponding series also gets a shaded standard-deviation band.
+        """
+        #####
+        # Input verification
+        #####
+        parser = None
+        if isinstance(data, (str, Path)) or (
+            isinstance(data, (list, tuple))
+            and data
+            and all(isinstance(item, (str, Path)) for item in data)
+        ):
+            parser = cls(data, path=path)
+            series = parser.data
+            output_path = parser.path
+            if labels is None:
+                labels = [Path(filename).stem for filename in parser.filenames]
+        else:
+            output_path = Path(path) if path is not None else Path(".")
+            try:
+                if (
+                    isinstance(data, (list, tuple))
+                    and data
+                    and all(np.asarray(values).ndim == 2 for values in data)
+                ):
+                    series = [np.asarray(values, dtype=float) for values in data]
+                else:
+                    array = np.asarray(data, dtype=float)
+                    if array.ndim == 2:
+                        series = [array]
+                    elif array.ndim == 3:
+                        series = list(array)
+                    else:
+                        raise ValueError
+            except (TypeError, ValueError) as error:
+                raise ValueError(
+                    "data must be XVG filenames or numeric NumPy arrays."
+                ) from error
 
-        Plot replica RMSD traces from GROMACS ``.xvg`` files and annotate summary statistics.
-
-        For every system in ``File_list``, the RMSD time series of each replica listed in
-        ``File_numbers`` is loaded and drawn on a single axes, with each replica shaded
-        from a sequential colormap. Per-replica mean RMSDs and their spread are printed,
-        and a summary of the mean and standard deviation is shown in the plot title. The
-        figure can optionally be saved as a 300 dpi PNG.
-
-        The path of each input file is built as::
-
-            {File_path1}{name}{File_path2}/{File_name}{replica}.xvg
-
-        where ``name`` is an entry of ``File_list`` and ``replica`` is a replica number
-        taken from the matching entry of ``File_numbers``.
-
-        :param File_path1: Prefix of the directory path, placed before the system name.
-            Also the base directory for saved figures (``{File_path1}Figures_paper/``).
-        :type File_path1: str
-        :param File_path2: Suffix of the directory path, placed after the system name
-            and before ``/``.
-        :type File_path2: str
-        :param File_name: Filename stem of the ``.xvg`` files. The replica number and
-            ``.xvg`` are appended, e.g. ``"rmsd_"`` gives ``rmsd_1.xvg``.
-        :type File_name: str
-        :param File_list: System/directory names to process. Each is substituted for
-            ``name`` in the path template above.
-        :type File_list: list[str]
-        :param File_numbers: Replica numbers for each system, parallel to ``File_list``.
-            Each element is a comma-separated string of integers, e.g. ``"1,2,3"``.
-        :type File_numbers: list[str]
-        :param Name: Label shown in the legend box.
-        :type Name: str
-        :param CName: Name of a Matplotlib colormap (e.g. ``"Blues"``) used to colour
-            individual replica traces. Sampled over the range 0.2 to 1 to avoid
-            near-white colours.
-        :type CName: str
-        :param Colour: A single Matplotlib colour used for the title text and the legend
-            line. It is independent of ``CName``, so choose a colour that matches the
-            colormap.
-        :type Colour: str or tuple
-        :param Title: Output filename stem. If truthy, the figure is saved to
-            ``{File_path1}Figures_paper/{Title}.png`` at 300 dpi. If empty or ``None``,
-            nothing is saved.
-        :type Title: str or None
-        :param ylim: Y-axis limits as ``(ymin, ymax)`` in nm.
-        :type ylim: tuple[float, float]
-
-        :returns: ``None``. The figure is displayed with ``plt.show()`` and optionally
-            written to disk.
-        :rtype: None
-
-        .. note::
-        **Statistics.** Two different quantities are reported:
-
-        * ``av_mean`` / ``av_sd``: the mean and standard deviation of all RMSD values
-            pooled over every replica of a system (all frames of all replicas).
-        * ``average_mean`` / ``average_std``: the mean and standard deviation of the
-            *per-replica* mean RMSDs, i.e. the between-replica spread.
-
-        The plot title shows ``av_mean ± average_std``, which mixes the pooled mean
-        with the between-replica standard deviation.
-
-        .. warning::
-        Only the **last** entry of ``File_list`` contributes to the title text and the
-        final printed summary, because the statistics variables are overwritten on each
-        iteration of the outer loop. All systems are drawn on the same axes, but only
-        the last is annotated. In practice this function is intended to be called with
-        a single-system ``File_list``.
-
-        .. warning::
-        All replicas of a system must have the same number of frames, since they are
-        stacked into a single array for the per-frame mean and standard deviation.
-        Those per-frame quantities are currently computed but not plotted (the
-        corresponding ``ax.plot`` and ``fill_between`` calls are commented out).
-
-        **Example**::
-
-            plot_individual_rmsd_xvg_files(
-                File_path1="/data/sims/", File_path2="/analysis", File_name="rmsd_",
-                File_list=["CNR4A_iBu"], File_numbers=["1,2,3,4,5"],
-                Name="CNR4A + iBu", CName="Blues", Colour="tab:blue",
-                Title="CNR4A_iBu_rmsd", ylim=(0.0, 4.0),
+        if not series:
+            raise ValueError("At least one data series is required.")
+        for index, values in enumerate(series):
+            if values.ndim != 2 or values.shape[0] < 2 or values.shape[1] == 0:
+                raise ValueError(
+                    f"Series {index} must have at least two channels and one data point."
+                )
+        #####
+        # Label handling
+        #####
+        single_label = False
+        if labels is None:
+            labels = (
+                [name]
+                if len(series) == 1 and name
+                else [f"Run {index + 1}" for index in range(len(series))]
             )
-        """
+        elif isinstance(labels, str):
+            single_label = labels
+        elif len(labels) != len(series):
+            raise ValueError(f"Got {len(labels)} labels for {len(series)} data series.")
+
+        #####
+        # Standard deviation handling
+        #####
+        if stds is not None:
+            std_array = np.asarray(stds, dtype=float)
+            if std_array.ndim == 1 and len(series) == 1:
+                std_series = [std_array]
+            elif std_array.ndim == 2:
+                std_series = list(std_array)
+            else:
+                raise ValueError(
+                    "stds must contain one one-dimensional array per data series."
+                )
+            if len(std_series) != len(series):
+                raise ValueError(
+                    f"Got {len(std_series)} standard-deviation arrays for "
+                    f"{len(series)} data series."
+                )
+            for index, (values, deviations) in enumerate(zip(series, std_series)):
+                if len(deviations) != values.shape[1]:
+                    raise ValueError(
+                        f"Series {index} has {values.shape[1]} points but "
+                        f"{len(deviations)} standard deviations."
+                    )
+        else:
+            std_series = None
+        #####
+        # Tick label handling
+        #####
+        if tick_labels is not None:
+            if any(values.shape[1] != series[0].shape[1] for values in series) or (
+                len(tick_labels) != series[0].shape[1]
+            ):
+                raise ValueError(
+                    "tick_labels must match the points in each data series."
+                )
+            if tick_spacing < 1:
+                raise ValueError("tick_spacing must be a positive integer.")
+
+        #####
+        # Block average
+        #####
         def block_average(x, y, n=5):
             m = len(x) // n * n                      # drop leftover points that don't fill a block
             x_new = x[:m].reshape(-1, n).mean(axis=1)
             y_new = y[:m].reshape(-1, n).mean(axis=1)
             return x_new, y_new
+        #####
+        # Create and populate the figure and axes
+        #####
+        colors = mpl.colormaps[cname](np.linspace(0.2, 1, len(series)))
+        fig, ax = plt.subplots(
+            figsize=(12, 6) if tick_labels is not None else (9, 5)
+        )
+        seen_labels = set()
+        for index, (values, label, color) in enumerate(zip(series, labels, colors)):
+            if block_size is not None:
+                x_values, y_values = block_average(values[0], values[1], n=block_size)
+            else:
+                x_values, y_values = values[0], values[1]
+            display_label = label if label not in seen_labels else "_nolegend_"
+            seen_labels.add(label)
+            line, = ax.plot(x_values, y_values, color=color, label=display_label)
+            if std_series is not None:
+                deviation = std_series[index] * band_scale
+                ax.fill_between(
+                    x_values,
+                    y_values - deviation,
+                    y_values + deviation,
+                    color=line.get_color(),
+                    alpha=0.3,
+                )
 
+        if xlabel is None and parser is not None:
+            xlabel = parser.metadata[0].get("xaxis")
+        if ylabel is None and parser is not None:
+            ylabel = parser.metadata[0].get("yaxis")
+        if xlabel:
+            ax.set_xlabel(xlabel, fontsize=fontsize)
+        if ylabel:
+            ax.set_ylabel(ylabel, fontsize=fontsize)
+        if x_limits is not None:
+            ax.set_xlim(x_limits)
+        if y_limits is not None:
+            ax.set_ylim(y_limits)
+        if tick_labels is not None:
+            x_values = series[0][0]
+            ax.set_xticks(x_values[::tick_spacing])
+            ax.set_xticklabels(
+                list(tick_labels)[::tick_spacing],
+                rotation=45,
+                fontsize=fontsize,
+            )
+            if not isinstance(tick_labels[0], str):
+                ax.xaxis.minorticks_on()
+                ax.xaxis.set_minor_locator(AutoMinorLocator(5))
+        ax.yaxis.minorticks_on()
+        ax.yaxis.set_minor_locator(AutoMinorLocator(5))
+        ax.tick_params(which="both", width=2, labelsize=fontsize)
+        ax.tick_params(which="major", direction="inout", length=8)
+        ax.tick_params(which="minor", length=4, direction="in")
+        if decimals_on_xaxis is not None:
+            ax.xaxis.set_major_formatter(
+                FormatStrFormatter(f"%.{decimals_on_xaxis}f")
+            )
+        ax.yaxis.set_major_formatter(
+            FormatStrFormatter(f"%.{decimals_on_yaxis}f")
+        )
+        #####
+        # Legend creation
+        #####
+        if single_label:
+            cmap = mpl.colormaps[cname]
+            # `color` for individual RMSD traces
+            color = cmap(np.linspace(0.2, 1, len(series)))
+            # `colour` for annotation text and the legend line
+            colour = color[len(series) // 2]
+            box = ax.get_position()
+            ax.set_position([box.x0, box.y0, box.width * 1, box.height])
+            #fig.legend(loc = 'upper right',bbox_to_anchor=(0.99, 0.85),fontsize=20)
+            custom_line = [Line2D([0], [0], color=colour, lw=2)]
+            ax.legend(custom_line, [f"{single_label}"], bbox_to_anchor=(0.02, 0.85), loc='lower left',
+                            ncols=1, borderaxespad=0., fontsize=20)
+        else:
+            ax.legend(fontsize=fontsize)
+        #####
+        # Add info in the bottom right corner?
+        #####
+        if annotation:
+            ax.text(
+                0.98,
+                0.03,
+                annotation,
+                transform=ax.transAxes,
+                fontsize=fontsize,
+                color=colors[len(colors) // 2],
+                ha="right",
+                va="bottom",
+            )
+        if title:
+            ax.set_title(title, fontsize=fontsize)
+        fig.tight_layout()
+        if fname:
+            fig.savefig(output_path / f"{fname}.png", dpi=300)
+        if show:
+            plt.show()
+        return fig, ax
 
-        # def plot_individual_rmsd_xvg_files(File_path1, File_path2, File_name, File_list, File_numbers, Name, CName, Colour, Title, ylim):
-        fig, ax = plt.subplots(figsize=(9,5))
+    def rmsd_plot(
+        self,
+        name,
+        cname="Blues",
+        title="",
+        fname="",
+        x_range_ns=1000,
+        ylim=(0, 0.2),
+        fontsize=20,
+        labels=None,
+        decimals_on_xaxis=0,
+        decimals_on_yaxis=2,
+        block_size=None
+    ):
 
-        all_variables = []
+        if labels == None:
+            labels = [name] * self.size
+        series = []
         mean_list = []
-        cmap = mpl.colormaps[cname]
-        # `color` for individual RMSD traces
-        color = cmap(np.linspace(0.2, 1, self.size))
-        # `colour` for annotation text and the legend line
-        colour = color[self.size // 2]
-        for filename, c in zip(self.filenames, color):
+        for filename in self.filenames:
             data = self.get_numpy(filename)
-            n = int(len(data[0])/500)
-            x_or = (data[0]/1000)[:,None]
-            y_or = data[1][:,None]
-            x, y = block_average(x_or, y_or, n=n)
-            all_variables.append(y_or)
-            ax.plot(x, y, color = c)
+            if block_size is None:
+                block_size = max(1, int(len(data[0]) / 500))
+            x = (data[0]/1000)[:,None]
+            y = data[1][:,None]
             mean = np.mean(y)
             mean_list.append(mean)
+            series.append(np.vstack((x.T, y.T)))
 
         average_std = np.std(mean_list)
         average_mean = np.mean(mean_list)
 
-        # Calculate mean and standard deviation for each time point across simulations
-        concatenate = np.stack(all_variables, axis=1)
-        mean_data = concatenate.mean(axis=1)
-        sd_data = concatenate.std(axis=1)
-        x = np.arange(len(mean_data))
-        y = mean_data
-        error = sd_data/2
-        #ax.plot(x,y,label=f'{Name}', color=Colour[j])
-        #ax.fill_between(x, y-error, y+error, alpha=0.3, color=Colour)
+        return self.plot_scaffold(
+            series,
+            name=name,
+            cname=cname,
+            title=title,
+            fontsize=fontsize,
+            fname=fname,
+            path=self.path,
+            xlabel="Time (ns)",
+            ylabel="RMSD (nm)",
+            labels=labels,
+            x_limits=(-x_range_ns / 100, x_range_ns + x_range_ns / 100),
+            y_limits=ylim,
+            decimals_on_xaxis=decimals_on_xaxis,
+            decimals_on_yaxis=decimals_on_yaxis,
+            annotation=f"{average_mean:.2f} ± {average_std:.2f} nm",
+            block_size=block_size,
+        )
 
+    def rmsf_plot(
+        self,
+        name,
+        cname="Blues",
+        fname="",
+        equiv=None,
+        ylim=(0, 0.2),
+        title="",
+        fontsize=15,
+        tick_labels=None,
+        labels=None
+    ):
+        """Plot RMSF profiles, optionally averaging groups of equivalent atoms.
 
-        ax.set_xlabel('Time (ns)',fontsize=20)
-        ax.set_ylabel('RMSD (nm)',fontsize=20)
-        #plt.suptitle(name, fontsize= 15)# Add subtitle above the title
-        #plt.title(f'{average_mean:.2f} ± {average_std:.2f} nm', fontsize=20, x=0.16, y=0.75, color=colour) #x=0.85, y=0.01
-        ax.text(0.98, 0.03, f'{average_mean:.2f} ± {average_std:.2f} nm',
-        transform=ax.transAxes, fontsize=20, color=colour, ha='right', va='bottom')
+        ``equiv`` contains zero-based atom-index groups. Groups labeled with an atom
+        name starting with ``H`` are omitted.
+        """
 
-        ax.minorticks_on()
-        ax.set_ylim(ylim)
-        ax.xaxis.set_minor_locator(AutoMinorLocator(5))
-        ax.yaxis.set_minor_locator(AutoMinorLocator(5))
+        #####
+        # Do some input verification and preprocessing
+        #####
+        lengths = [data.shape[1] for data in self.data]
+        if any(length != lengths[0] for length in lengths[1:]):
+            mismatched = next(
+                i for i, length in enumerate(lengths) if length != lengths[0]
+            )
+            raise ValueError(
+                f"All .xvg files must have the same number of data points. "
+                f"File {self.filenames[mismatched]} has {lengths[mismatched]} points, "
+                f"while the first file has {lengths[0]}."
+            )
 
-        ax.tick_params(which='both', width=2, labelsize=19)
-        ax.tick_params(which='major', direction='inout', length=8)
-        ax.tick_params(which='minor', length=4, direction = "in")
-        plt.rcParams['ytick.left'] = True
-        decimals_on_yaxis=2
-        decimals_on_xaxis=0
-        ax.yaxis.set_major_formatter(FormatStrFormatter(f"%.{decimals_on_yaxis}f"))
-        ax.xaxis.set_major_formatter(FormatStrFormatter(f"%.{decimals_on_xaxis}f"))
-        ax.set_xlim(-x_range_ns/100, x_range_ns + x_range_ns/100)
-        #plt.title('Average RMSD', fontsize=18)
-        #fig.legend(fontsize=11, bbox_to_anchor=(1.01,1),loc='upper left')
-
-        box = ax.get_position()
-        ax.set_position([box.x0, box.y0, box.width * 1, box.height])
-        #fig.legend(loc = 'upper right',bbox_to_anchor=(0.99, 0.85),fontsize=20)
-        custom_line = [Line2D([0], [0], color=colour, lw=2)]
-        ax.legend(custom_line, [f"{name}"], bbox_to_anchor=(0.02, 0.85), loc='lower left',
-                        ncols=1, borderaxespad=0., fontsize=20)
-        if title:
-            ax.set_title(title, fontsize=fontsize)
-        plt.tight_layout()
-        if fname:
-            plt.savefig(f"{self.path}/{fname}.png", dpi=300)
-        plt.show()
-
-    def rmsf_plot(self, name, cname="Blues", fname="", equiv=None, x_range_ns=1000, ylim=(0,0.2)):
-        for i, data in enumerate(self.data):
-            if i == 0:
-                first_len = len(data[0])
-                continue
-            if len(data[0]) != first_len:
-                raise ValueError(f"All .xvg files must have the same number of data points. File {self.filenames[i]} has {len(data[0])} points, while the first file has {first_len}.")
-
-        ave = []
-        sd
+        x_values = self.data[0][0]
+        for index, data in enumerate(self.data[1:], start=1):
+            if not np.array_equal(data[0], x_values):
+                raise ValueError(
+                    f"File {self.filenames[index]} has x values that do not match "
+                    "the first file."
+                )
+        #####
+        # Handle equivalent atom groups if provided
+        #####
         if equiv is not None:
-            if isinstance(equiv, (list, tuple)):
-                pass
-            elif isinstance(equiv, str) or isinstance(equiv, Path):
-                with open(equiv) as f:
-                    equiv = json.load(f)
-            else:
-                raise ValueError(f"Argument `equiv` is invalid.")
-            if len(list(it.chain.from_iterable(equiv))) != first_len:
-                raise ValueError(f"Argument `equiv` must have the same number of elements as the number of data points in the .xvg files. Expected {first_len}, got {len(it.chain.from_iterable(equiv))}.")
-            # dev: do data condensation
-        else:
-            #np view of the columns of the data
-            data_array = np.array([data[1] for data in self.data])
-            ave = np.mean(data_array, axis=0)
-            sd = np.std(data_array, axis=0)
-            print(len(ave), len(sd))
+            if isinstance(equiv, (str, Path)):
+                with open(equiv) as file:
+                    equiv = json.load(file)
+            if not isinstance(equiv, (list, tuple)):
+                raise ValueError(
+                    "Argument `equiv` must be a list, tuple, or JSON filename."
+                )
+            # groups contains the atom indices for each equivalent atom group
+            groups = []
+            for group_index, group in enumerate(equiv):
+                if not isinstance(group, (list, tuple, np.ndarray)):
+                    raise ValueError(
+                        f"Equivalent atom group {group_index} must be a sequence."
+                    )
+                indices = np.asarray(group)
+                if indices.ndim != 1 or indices.size == 0:
+                    raise ValueError(
+                        f"Equivalent atom group {group_index} must not be empty."
+                    )
+                if not np.issubdtype(indices.dtype, np.integer):
+                    raise ValueError(
+                        f"Equivalent atom group {group_index} must contain integer indices."
+                    )
+                if np.any(indices < 0) or np.any(indices >= lengths[0]):
+                    raise ValueError(
+                        f"Equivalent atom group {group_index} has an index outside "
+                        f"the available range 0..{lengths[0] - 1}."
+                    )
+                groups.append(indices.astype(int))
 
-            #for i in range(first_len):
+            if not groups:
+                raise ValueError("equiv must contain at least one atom group.")
 
+            if tick_labels is None:
+                tick_labels = [f"Group {index + 1}" for index in range(len(groups))]
+            elif len(tick_labels) != len(groups):
+                raise ValueError(
+                    f"tick_labels must contain {len(groups)} tick_labels, "
+                    f"got {len(tick_labels)}."
+                )
 
+            keep_groups = [
+                index
+                for index, atom_name in enumerate(tick_labels)
+                if not str(atom_name).startswith("H")
+            ]
+            if not keep_groups:
+                raise ValueError("No non-hydrogen equivalent atom groups remain to plot.")
 
+            x_plot = np.arange(len(keep_groups))
+            means_list = []
+            stds_list = []
+            for data in self.data:
+                means = np.asarray(
+                    [np.mean(data[1][indices]) for indices in groups]
+                )
+                deviations = np.asarray(
+                    [np.std(data[1][indices]) for indices in groups]
+                )
+                means_list.append(means[keep_groups])
+                stds_list.append(deviations[keep_groups])
+            series = [
+                np.vstack((x_plot, means)) for means in means_list
+            ]
+            if labels is None:
+                labels = [Path(filename).stem for filename in self.filenames]
+            return self.plot_scaffold(
+                series,
+                name=name,
+                cname=cname,
+                title=title,
+                fontsize=fontsize,
+                fname=fname,
+                path=self.path,
+                xlabel="Names",
+                ylabel="RMSF (nm)",
+                labels=labels,
+                stds=stds_list,
+                band_scale=0.5,
+                y_limits=ylim,
+                tick_labels=[tick_labels[index] for index in keep_groups],
+                show=True,
+            )
 
+        #####
+        # No equivalent atom groups, just plot the RMSF profiles directly
+        #####
+        if tick_labels is not None and len(tick_labels) != lengths[0]:
+            raise ValueError(
+                f"labels must contain {lengths[0]} labels, "
+                f"got {len(tick_labels)}."
+            )
 
-
-#            elif isinstance(equiv, Path):
-#            if not Path(equiv).is_file():
-#                raise FileNotFoundError(f"The file `{equiv}` does not exist.")
-#            try:
-#
-#            , f"The file `{equiv}` does not exist."
-#        else:
-#
-#
-#            i
-#        if 
+        y_values = np.asarray([data[1] for data in self.data])
+        mean_values = np.mean(y_values, axis=0)
+        std_values = np.std(y_values, axis=0)
+        if labels is None:
+            labels = [name]
+        return self.plot_scaffold(
+            np.vstack((x_values, mean_values)),
+            name=name,
+            cname=cname,
+            title=title,
+            fontsize=fontsize,
+            fname=fname,
+            path=self.path,
+            xlabel="Residue",
+            ylabel="RMSF (nm)",
+            labels=labels,
+            stds=std_values,
+            y_limits=ylim,
+            tick_labels=tick_labels,
+            show=True,
+        )
 
     def msd_plot(self, name, cname="Blues", title="", fontsize=20, fname="", x_range_ns=None, ylim=(0, 0), ylabel=''):
-        
+        """
+        Plot MSD traces from GROMACS ``.xvg`` files and annotate summary statistics.
+        """
+        #####
+        # Do some input verification and preprocessing
+        #####
         if x_range_ns is None:
             x_range_ns = max([max(data[0]) for data in self.data]) / 1000
         if ylim == (0, 0):
             y_max = max([max(data[1]) for data in self.data])
             ylim = (0, y_max * 1.1)
-        # uses the same template as the rmsd_plot method
-        fig, ax = plt.subplots(figsize=(9,5))
-
-        cmap = mpl.colormaps[cname]
-        # `color` for individual RMSD traces
-        color = cmap(np.linspace(0.2, 1, self.size))
-        # `colour` for annotation text and the legend line
-        colour = color[self.size // 2]
-        for filename, c in zip(self.filenames, color):
-            data = self.get_numpy(filename)
-            x = data[0]/1000
-            y = data[1]
-            ax.plot(x, y, color = c)
-        ax.set_xlabel(r'$\tau$ (ns)',fontsize=20)
-        if ylabel:
-            ax.set_ylabel(ylabel, fontsize=20)
-        else:
-            ax.set_ylabel(r'MSD (nm$^2$)',fontsize=20)
-        # plant the D
-        D_vals = [float(s["columns"][1].split()[2]) for s in self.metadata]
+        D_vals = [
+            float(metadata["columns"][1].split()[2])
+            for metadata in self.metadata
+        ]
         D_mean = np.mean(D_vals)
         D_std = np.std(D_vals)
+        if D_mean == 0:
+            raise ValueError("The mean diffusion coefficient must be nonzero.")
         exponent = int(np.floor(np.log10(abs(D_mean))))
         scale = 10**exponent
         print_exponent = -5 + exponent
-        ax.text(
-            0.98, 0.03,
-            rf'$D = ({D_mean/scale:.2f} \pm {D_std/scale:.2f})\times 10^{{{print_exponent}}}\ \mathrm{{cm}}^2$',
-            transform=ax.transAxes, fontsize=20, color=colour,
-            ha='right', va='bottom'
+        annotation = rf'$D = ({D_mean/scale:.2f} \pm {D_std/scale:.2f})\times 10^{{{print_exponent}}}\ \mathrm{{cm}}^2$s$^{{{-1}}}$'
+        series = [np.vstack((data[0] / 1000, data[1])) for data in self.data]
+        return self.plot_scaffold(
+            series,
+            name=name,
+            cname=cname,
+            title=title,
+            fontsize=fontsize,
+            fname=fname,
+            path=self.path,
+            xlabel=r"$\tau$ (ns)",
+            ylabel=ylabel or r"MSD (nm$^2$)",
+            labels=[name] * self.size,
+            x_limits=(-x_range_ns / 100, x_range_ns + x_range_ns / 100),
+            y_limits=ylim,
+            annotation=annotation,
         )
-        ax.minorticks_on()
-        ax.set_ylim(ylim)
-        ax.xaxis.set_minor_locator(AutoMinorLocator(5))
-        ax.yaxis.set_minor_locator(AutoMinorLocator(5))
-        ax.tick_params(which='both', width=2, labelsize=19)
-        ax.tick_params(which='major', direction='inout', length=8)
-        ax.tick_params(which='minor', length=4, direction = "in")
-        plt.rcParams['ytick.left'] = True
-        decimals_on_yaxis=2
-        decimals_on_xaxis=0
-        ax.yaxis.set_major_formatter(FormatStrFormatter(f"%.{decimals_on_yaxis}f"))
-        ax.xaxis.set_major_formatter(FormatStrFormatter(f"%.{decimals_on_xaxis}f"))
-        ax.set_xlim(-x_range_ns/100, x_range_ns + x_range_ns/100)
-
-        box = ax.get_position()
-        ax.set_position([box.x0, box.y0, box.width * 1, box.height])
-        #fig.legend(loc = 'upper right',bbox_to_anchor=(0.99, 0.85),fontsize=20)
-        custom_line = [Line2D([0], [0], color=colour, lw=2)]
-        ax.legend(custom_line, [f"{name}"], bbox_to_anchor=(0.02, 0.85), loc='lower left',
-                        ncols=1, borderaxespad=0., fontsize=20)
-        if title:
-            ax.set_title(title, fontsize=fontsize)
-        plt.tight_layout()
-        if fname:
-            plt.savefig(f"{self.path}/{fname}.png", dpi=300)
-        plt.show()
-
-
-
 
     def __len__(self):
         return self.size
@@ -616,3 +827,86 @@ class XvgParser:
     def _resolveIndex(self, index):
         self._validateIndex(index)
         return self.filenames.index(index) if isinstance(index, str) else index
+
+
+def plot_rmsf_multi(means_list, stds_list, residue_names, cname="Blues", fname="", labels=None, tick_spacing=1,
+                    ax=None, band_scale=0.5, title=None, fontsize=15):
+    """
+    Plot several per-residue RMSF profiles (mean line + shaded SD band) on one axis.
+
+    means_list, stds_list : lists of sequences, e.g. 5 arrays of 100 values each
+    residue_names         : sequence of residue labels, shared by all runs (length 100)
+    labels                : legend label per run (defaults to "Run 1", "Run 2", ...)
+    tick_spacing          : label every Nth residue on the x axis
+    ax                    : existing Axes to draw on; a new figure is created if None
+    band_scale            : fraction of the SD used for the shaded band
+    """
+    if len(means_list) != len(stds_list):
+        raise ValueError(f"Got {len(means_list)} mean arrays but {len(stds_list)} std arrays")
+
+    n_res = len(residue_names)
+    for i, (m, s) in enumerate(zip(means_list, stds_list)):
+        if not (len(m) == len(s) == n_res):
+            raise ValueError(
+                f"Run {i}: means={len(m)}, stds={len(s)}, residue_names={n_res} (must all match)"
+            )
+
+    def diffSubstr(strings=[]):
+        """
+        Strips the right and left overlapping parts to return the middle that is differing.
+        Might still return ["1c1","2c2"]
+        """
+        p = len(commonprefix(strings))
+        s = len(commonprefix([x[::-1] for x in strings]))
+        return [x[p:max(p, len(x) - s)] for x in strings]
+    if labels is None:
+        labels = diffSubstr([f"Run {i + 1}" for i in range(len(means_list))])
+    elif len(labels) != len(means_list):
+        raise ValueError(f"Got {len(labels)} labels for {len(means_list)} runs")
+    else:
+        labels = diffSubstr(labels)
+
+    colorsets = ["Blues", "Oranges", "Greens", "Purples", "Greys"]
+    if cname not in colorsets:
+        raise ValueError(f"Color set '{cname}' not recognized. Choose from {colorsets}.")
+
+    cmap = mpl.colormaps[cname](np.linspace(0.2, 1, len(means_list)))
+
+
+    if ax is None:
+        _, ax = plt.subplots(figsize=(12, 6))
+
+    x_names = np.arange(n_res)
+    for means, stds, lab, color in zip(means_list, stds_list, labels, cmap):
+        means = np.asarray(means, dtype=float)
+        error = np.asarray(stds, dtype=float) * band_scale
+        line, = ax.plot(x_names, means, label=lab, color=color)
+        ax.fill_between(x_names, means - error, means + error, alpha=0.3, color=line.get_color())
+    ax.set_xticks(x_names[::tick_spacing])
+    ax.set_xticklabels(list(residue_names)[::tick_spacing], rotation=45, fontsize=fontsize)
+    ax.set_yticks([0, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3])
+    ax.tick_params(axis="y", labelsize=fontsize)
+    ax.set_xlabel("Names", fontsize=fontsize)
+    ax.set_ylabel("RMSF (nm)", fontsize=fontsize)
+    ax.legend(fontsize=13)
+    ax.yaxis.set_minor_locator(AutoMinorLocator(5))
+    ax.tick_params(which='both', width=2, labelsize=19)
+    ax.tick_params(which='major', direction='inout', length=8)
+    ax.tick_params(which='minor', length=4, direction = "in")
+    plt.rcParams['ytick.left'] = True
+    ax.yaxis.set_major_formatter(FuncFormatter(
+    lambda y, _: "0" if y == 0 else f"{y:.2f}"
+    ))
+    plt.tight_layout()
+    if title:
+        ax.set_title(title, fontsize=fontsize)
+    if fname:
+        # save inside dir called `rmsf` if it exists, otherwise save in current dir
+        rmsf_dir = Path("rmsf")
+        if rmsf_dir.exists():
+            if rmsf_dir.is_dir():
+                plt.savefig(rmsf_dir / f"{fname}.png", dpi=300)
+        else:
+            plt.savefig(f"{fname}.png", dpi=300)
+
+    plt.show()
